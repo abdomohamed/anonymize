@@ -12,31 +12,46 @@ Detect and anonymize Personally Identifiable Information (PII) in text files usi
 
 ## Installation
 
-### Using UV (Recommended - 10-100x faster)
+### Quick Setup (Recommended)
 
-[UV](https://github.com/astral-sh/uv) is an extremely fast Python package installer written in Rust.
+**Requirements:** Python 3.9+
 
 ```bash
-# Install UV if not already installed
-curl -LsSf https://astral.sh/uv/install.sh | sh
-# or: brew install uv
+# Clone the repository
+git clone https://github.com/abdomohamed/anonymize.git
+cd anonymize
 
-# Install dependencies
-uv sync
+# Run setup script (installs UV, dependencies, and spaCy model)
 ./setup.sh
-
-# Run the tool
-uv run anonymize input.txt -o output.txt
 ```
 
-### Using Pip
+The setup script automatically:
+- ✅ Checks Python installation
+- ✅ Installs [UV](https://github.com/astral-sh/uv) if not present (10-100x faster than pip)
+- ✅ Installs all dependencies via `uv sync`
+- ✅ Downloads spaCy English language model
 
+### Manual Installation
+
+**With UV:**
 ```bash
-# Install from pyproject.toml
+uv sync
+uv pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
+```
+
+**With pip:**
+```bash
 pip install -e .
 python -m spacy download en_core_web_sm
+```
 
-# Run the tool
+### Run the Tool
+
+```bash
+# Using UV (recommended)
+uv run anonymize input.txt -o output.txt
+
+# Or with pip installation
 python -m src.cli input.txt -o output.txt
 ```
 
@@ -249,18 +264,17 @@ uv run anonymize input.txt --confidence 0.6
 uv run anonymize input.txt --confidence 0.85
 ```
 
-**spaCy model missing?** Run setup:
+**Setup issues?** Run the setup script again:
 ```bash
 ./setup.sh
 ```
 
-**UV not installed?**
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-# or: brew install uv
-```
+This will:
+- Install UV if missing
+- Sync all dependencies
+- Download spaCy model
 
-**Import errors with UV?**
+**Import errors?**
 ```bash
 uv sync --reinstall
 ```
