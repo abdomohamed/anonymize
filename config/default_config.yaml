@@ -1,0 +1,139 @@
+# Default Configuration for PII Anonymization Tool
+# This file contains the default settings for detection and anonymization
+
+detection:
+  # Presidio configuration
+  # Language for detection
+  language: "en"
+  
+  # Minimum confidence threshold for detection (0.0 - 1.0)
+  confidence_threshold: 0.7
+  
+  # Specific entity types to detect (null/empty = all)
+  # Available entities: EMAIL_ADDRESS, PHONE_NUMBER, CREDIT_CARD, CRYPTO,
+  # DATE_TIME, IBAN_CODE, IP_ADDRESS, LOCATION, PERSON, US_SSN, US_BANK_NUMBER,
+  # US_DRIVER_LICENSE, US_ITIN, US_PASSPORT, UK_NHS, and more
+  # See: https://microsoft.github.io/presidio/supported_entities/
+  enabled_entities:
+    - EMAIL_ADDRESS
+    - PHONE_NUMBER
+    - US_SSN
+    - CREDIT_CARD
+    - IP_ADDRESS
+    - PERSON
+    - LOCATION
+  
+  # Set to null or remove to detect all entity types
+  # enabled_entities: null
+
+# Anonymization strategy configuration
+anonymization:
+  # Primary strategy: redact, mask, replace, or hash
+  strategy: "redact"
+  
+  # Redaction settings
+  redact:
+    # Token to use for redaction
+    token: "[REDACTED]"
+    
+    # Use type-specific tokens (e.g., [EMAIL_REDACTED], [PHONE_REDACTED])
+    type_specific: true
+  
+  # Masking settings
+  mask:
+    # Character to use for masking
+    mask_char: "*"
+    
+    # Number of visible characters for email (from start)
+    email_visible_chars: 1
+    
+    # Number of visible characters for phone (area code)
+    phone_visible_chars: 3
+    
+    # Number of visible digits for SSN (last 4)
+    ssn_visible_chars: 4
+    
+    # Number of visible digits for credit card (last 4)
+    credit_card_visible_chars: 4
+  
+  # Replacement settings (using Faker)
+  replace:
+    # Locale for fake data generation
+    locale: "en_US"
+    
+    # Seed for reproducible fake data (null for random)
+    seed: null
+    
+    # Preserve format (e.g., same email domain, same area code)
+    preserve_format: true
+  
+  # Hashing settings
+  hash:
+    # Hash algorithm to use
+    algorithm: "sha256"
+    
+    # Include PII type prefix in hash output
+    prefix: true
+    
+    # Salt for hashing (use environment variable for security)
+    # Set via PII_ANONYMIZE_SALT environment variable
+    salt: "default_salt_change_in_production"
+    
+    # Output format: full hash or truncated
+    truncate: 8  # Number of characters to keep
+
+# Processing configuration
+processing:
+  # Batch size for processing large files (lines)
+  batch_size: 1000
+  
+  # Preserve original formatting (whitespace, newlines)
+  preserve_formatting: true
+  
+  # Create audit log with anonymization details
+  create_audit_log: true
+  
+  # Backup original file before anonymization
+  backup_original: false
+  
+  # Output encoding
+  encoding: "utf-8"
+  
+  # Skip files that are already anonymized (based on extension)
+  skip_anonymized: true
+  
+  # Extension to add to output files
+  output_suffix: "_anonymized"
+
+# Whitelist: values that should NOT be anonymized
+# Add email addresses, domains, or patterns that are safe to keep
+whitelist:
+  emails:
+    - "noreply@example.com"
+    - "support@company.com"
+  
+  domains:
+    - "example.com"
+    - "localhost"
+  
+  patterns: []
+
+# Blacklist: values that should ALWAYS be anonymized
+# Even if they don't match standard patterns
+blacklist:
+  - "test@test.com"
+  - "123-45-6789"
+
+# Logging configuration
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
+  
+  # Log format
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # Log to file (null for console only)
+  file: null
+  
+  # Include detection details in logs
+  verbose: false
