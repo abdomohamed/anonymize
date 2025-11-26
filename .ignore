@@ -1,0 +1,45 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+*.pyd
+*.so
+*.egg
+*.egg-info/
+build/
+dist/
+wheels/
+.Python
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+.tox/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Project specific
+output/
+*.log
+*_audit.json
+config/user_config.yaml
+temp/
+tmp/
+
+# Backup files
+*.bak
+*.backup
+*_backup.*
