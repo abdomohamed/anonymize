@@ -10,7 +10,22 @@ Detect and anonymize Personally Identifiable Information (PII) in text files usi
 - 📦 **Batch processing**: single files or entire directories
 - 📝 **Audit logs**: JSON audit trails for compliance
 
-## Installation
+## Distribution Options
+
+### Option 1: Standalone Executable (Recommended for Restricted Environments)
+
+If you need to distribute this tool to users who cannot install Python or download packages, you can build a standalone executable. See **[BUILD_DISTRIBUTION.md](BUILD_DISTRIBUTION.md)** for detailed instructions.
+
+**Quick build:**
+```bash
+./build.sh           # Linux/macOS
+# or
+.\build.ps1          # Windows
+```
+
+This creates a single executable file in `dist/` that can be shared and run without any installation!
+
+### Option 2: Standard Installation
 
 ### Quick Setup (Recommended)
 

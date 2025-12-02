@@ -364,7 +364,9 @@ class FileProcessor:
             content: Content to write
         """
         # Create directory if it doesn't exist
-        os.makedirs(os.path.dirname(path), exist_ok=True)
+        directory = os.path.dirname(path)
+        if directory:  # Only create if directory path is not empty
+            os.makedirs(directory, exist_ok=True)
         
         with open(path, 'w', encoding=self.encoding) as f:
             f.write(content)
