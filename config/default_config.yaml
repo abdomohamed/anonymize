@@ -22,6 +22,9 @@ detection:
     - IP_ADDRESS
     - PERSON
     - LOCATION
+    - AU_PHONE_NUMBER
+    - AU_ADDRESS
+    - DATE_OF_BIRTH
   
   # Set to null or remove to detect all entity types
   # enabled_entities: null

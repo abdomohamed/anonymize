@@ -20,7 +20,10 @@ from src.utils import (
     merge_overlapping_matches, deduplicate_matches, 
     is_whitelisted, is_blacklisted, get_timestamp
 )
-
+from presidio_analyzer import RecognizerResult, Pattern
+from presidio_analyzer.recognizer_registry import RecognizerRegistry
+from presidio_analyzer.pattern_recognizer import PatternRecognizer
+from presidio_analyzer.nlp_engine import NlpEngineProvider
 
 class FileProcessor:
     """
@@ -67,9 +70,12 @@ class FileProcessor:
             AnalyzerEngine instance or None
         """
         try:
+            import logging
             from presidio_analyzer import AnalyzerEngine
             from presidio_analyzer.nlp_engine import NlpEngineProvider
-            
+            from presidio_analyzer.recognizer_registry import RecognizerRegistry
+            from presidio_analyzer.pattern_recognizer import PatternRecognizer
+
             language = self.detection_config.get('language', 'en')
             
             # Configure NLP engine
@@ -77,10 +83,34 @@ class FileProcessor:
                 "nlp_engine_name": "spacy",
                 "models": [{"lang_code": language, "model_name": "en_core_web_sm"}],
             }
-            
+        
             provider = NlpEngineProvider(nlp_configuration=nlp_configuration)
             nlp_engine = provider.create_engine()
-            analyzer = AnalyzerEngine(nlp_engine=nlp_engine)
+            
+            
+            registry = RecognizerRegistry()
+        
+            # Add default recognizers
+            registry.load_predefined_recognizers(nlp_engine=nlp_engine)
+            
+            # Add custom recognizers
+            # member_number_recognizer = self._create_member_number_recognizer()
+            enhanced_address_recognizer = self._create_enhanced_address_recognizer()
+            generic_number_recognizer = self._create_generic_number_recognizer()
+            au_phone_recognizer = self._create_australian_phone_recognizer()
+            dob_recognizer = self._dob_recognizer()
+            
+            # registry.add_recognizer(member_number_recognizer)
+            registry.add_recognizer(enhanced_address_recognizer)
+            registry.add_recognizer(generic_number_recognizer)
+            registry.add_recognizer(au_phone_recognizer)
+            registry.add_recognizer(dob_recognizer)
+
+            # Create analyzer with custom registry
+            analyzer = AnalyzerEngine(
+                nlp_engine=nlp_engine,
+                registry=registry
+            )
             
             print(f"✓ Presidio initialized (language: {language})")
             return analyzer
@@ -93,6 +123,121 @@ class FileProcessor:
             print(f"✗ Error initializing Presidio: {e}")
             return None
     
+    
+    def _create_australian_phone_recognizer(self) -> PatternRecognizer:
+            """Create custom recognizer for Australian phone numbers."""
+            # Australian phone number patterns
+            australian_phone_patterns = [
+                Pattern(
+                    name="au_landline",
+                    regex=r'\b0[2-9]\s?\d{4}\s?\d{4}\b',       # 0X XXXX XXXX (landline)
+                    score=0.85
+                ),
+                Pattern(
+                    name="au_mobile_standard",
+                    regex=r'\b04\d{2}\s?\d{3}\s?\d{3}\b',      # 04XX XXX XXX (mobile)
+                    score=0.9
+                ),
+                Pattern(
+                    name="au_mobile_compact",
+                    regex=r'\b04\d{8}\b',                      # 04XXXXXXXX (mobile)
+                    score=0.9
+                ),
+                Pattern(
+                    name="au_international",
+                    regex=r'\b\+61\s?[2-9]\s?\d{4}\s?\d{4}\b', # +61 X XXXX XXXX (international)
+                    score=0.95
+                ),
+                Pattern(
+                    name="au_synthetic",
+                    regex=r'\b04\d{4}\s?\d{3}\s?\d{3}\b',      # 04XXXX XXX XXX (synthetic data)
+                    score=0.7
+                )
+            ]
+            
+            return PatternRecognizer(
+                supported_entity="AU_PHONE_NUMBER",
+                patterns=australian_phone_patterns,
+                name="australian_phone_recognizer",
+                context=["phone", "mobile", "cell", "number", "call"]
+            )
+        
+    def _create_generic_number_recognizer(self) -> PatternRecognizer:
+        """Create custom recognizer for any sequence of digits."""
+        number_patterns = [
+            Pattern(
+                name="eight_digit_sequence",
+                regex=r"\b\d{8}\b",  # Specifically target 8-digit sequences
+                score=1.0 
+            ),
+            Pattern(
+                name="any_digit_sequence",
+                regex=r"\b\d{1,16}\b",  # Aggresively masking 1-16 digit sequences 
+                score=0.9  
+            ),
+            Pattern(
+                name="formatted_numbers",
+                regex=r"\b\d{1,3}(,\d{3})+\b",  # Matches numbers with commas like 1,000,000
+                score=0.65
+            ),
+            Pattern(
+                name="decimal_numbers",
+                regex=r"\b\d+\.\d+\b",  # Matches decimal numbers like 123.45
+                score=0.65
+            )
+        ]
+        
+        return PatternRecognizer(
+            supported_entity="GENERIC_NUMBER",
+            patterns=number_patterns,
+            name="generic_number_recognizer",
+            context=["number", "digit", "id", "member", "account"]  
+        )
+    
+    def _dob_recognizer(self) -> PatternRecognizer:
+        """Create custom recognizer for Date of Birth in DD/MM/YYYY format."""
+        dob_patterns = [
+            Pattern(
+                name="dob_ddmmyyyy",
+                regex=r'\b(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/(19|20)\d{2}\b',  # DD/MM/YYYY
+                score=0.65
+            ),
+            Pattern(
+                name="dob_mmddyyyy",
+                regex=r'\b((0[1-9]|1[0-2])\/(0[1-9]|[12][0-9]|3[01]))\/(19|20)\d{2}\b',  # MM/DD/YYYY
+                score=0.65
+            )
+        ]
+        
+        return PatternRecognizer(
+            supported_entity="DATE_OF_BIRTH",
+            patterns=dob_patterns,
+            name="dob_recognizer",
+            context=["date of birth", "dob", "birthdate", "born"],
+        )
+    
+    def _create_enhanced_address_recognizer(self) -> PatternRecognizer:
+        """Create enhanced address recognizer for Australian addresses."""
+        # Australian address patterns
+        australian_address_patterns = [
+            Pattern(
+                name="australian_street_address",
+                regex=r"\b\d{1,3}\s+(?:[A-Za-z]+\s+){1,5}(Street|St|Road|Rd|Avenue|Ave|Drive|Dr|Lane|Ln|Boulevard|Blvd|Circuit|Cct|Court|Ct|Place|Pl|Way|Crescent|Cres)\b,?\s*(?:[A-Za-z]+\s+){1,3}(NSW|VIC|QLD|WA|SA|TAS|ACT|NT)\s+\d{4}\b",
+                score=0.95
+            ),
+            Pattern(
+                name="australian_street_simple",
+                regex=r"\b\d{1,3}\s+(?:[A-Za-z]+\s+){1,5}(Street|St|Road|Rd|Avenue|Ave|Drive|Dr|Lane|Ln|Boulevard|Blvd|Circuit|Cct|Court|Ct|Place|Pl|Way|Crescent|Cres)\b",
+                score=0.7
+            )
+        ]
+        
+        return PatternRecognizer(
+            supported_entity="AU_ADDRESS",
+            patterns=australian_address_patterns,
+            name="australian_address_recognizer"
+        )
+        
     def _init_anonymizer(self) -> BaseAnonymizer:
         """
         Initialize anonymizer based on configured strategy.

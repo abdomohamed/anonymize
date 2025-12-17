@@ -34,6 +34,8 @@ Customer: Thanks! By the way, my wife Jane Smith also needs help with her accoun
 
 Agent: I can help with that too. What's her date of birth for verification?
 
+0450125908
+
 Customer: Her DOB is 05/15/1985, and mine is 03/22/1980.
 
 Agent: Perfect. I'm also seeing your address on file as 123 Main Street, Springfield, IL 62701. Is that still current?
