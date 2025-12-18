@@ -14,17 +14,45 @@ detection:
   # DATE_TIME, IBAN_CODE, IP_ADDRESS, LOCATION, PERSON, US_SSN, US_BANK_NUMBER,
   # US_DRIVER_LICENSE, US_ITIN, US_PASSPORT, UK_NHS, and more
   # See: https://microsoft.github.io/presidio/supported_entities/
+  # 
+  # Australian-specific entities:
+  # - Presidio built-in (with checksum validation): AU_TFN, AU_MEDICARE, AU_ABN, AU_ACN
+  # - Custom recognizers: AU_NBN_LOC_ID, AU_NBN_SERVICE_ID, AU_SPECIAL_PHONE, 
+  #   AU_PO_BOX, AU_NTD_SERIAL, AU_PHONE_NUMBER, AU_ADDRESS, IMEI, ICCID, 
+  #   DATE_OF_BIRTH, GENERIC_NUMBER
   enabled_entities:
+    # Standard Presidio entities
     - EMAIL_ADDRESS
     - PHONE_NUMBER
-    - US_SSN
     - CREDIT_CARD
     - IP_ADDRESS
     - PERSON
     - LOCATION
+    # Australian phone and address (custom)
     - AU_PHONE_NUMBER
     - AU_ADDRESS
     - DATE_OF_BIRTH
+    # Australian Government IDs (Presidio built-in with checksums)
+    - AU_TFN
+    - AU_MEDICARE
+    - AU_ABN
+    - AU_ACN
+    # NBN/Telecom IDs (custom - telecom specific)
+    - AU_NBN_LOC_ID
+    - AU_NBN_SERVICE_ID
+    - AU_SPECIAL_PHONE
+    # Address patterns (custom)
+    - AU_PO_BOX
+    # Device Identifiers (custom - telecom specific)
+    - IMEI
+    - ICCID
+    - AU_NTD_SERIAL
+    # Generic catch-all (use with caution - high false positive risk)
+    - GENERIC_NUMBER
+    # Australian Identity Documents (custom)
+    - AU_DRIVER_LICENSE
+    - AU_PASSPORT
+    - AU_CENTRELINK_CRN
   
   # Set to null or remove to detect all entity types
   # enabled_entities: null
