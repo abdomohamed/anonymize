@@ -86,7 +86,7 @@ class FileProcessor:
         
             provider = NlpEngineProvider(nlp_configuration=nlp_configuration)
             nlp_engine = provider.create_engine()
-            
+            nlp_engine.nlp["en"].max_length = 10000000
             
             registry = RecognizerRegistry()
         
