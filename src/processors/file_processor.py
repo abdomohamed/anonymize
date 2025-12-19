@@ -75,6 +75,10 @@ class FileProcessor:
             from presidio_analyzer.nlp_engine import NlpEngineProvider
             from presidio_analyzer.recognizer_registry import RecognizerRegistry
             from presidio_analyzer.pattern_recognizer import PatternRecognizer
+            # Import Australian recognizers (not loaded by default)
+            from presidio_analyzer.predefined_recognizers import (
+                AuMedicareRecognizer, AuTfnRecognizer, AuAbnRecognizer, AuAcnRecognizer
+            )
 
             language = self.detection_config.get('language', 'en')
             
@@ -93,9 +97,12 @@ class FileProcessor:
             # Add default recognizers
             registry.load_predefined_recognizers(nlp_engine=nlp_engine)
             
-            # Add custom recognizers
-            # NOTE: Presidio provides built-in recognizers for AU_TFN, AU_MEDICARE, AU_ABN, AU_ACN
-            # with checksum validation - loaded via registry.load_predefined_recognizers()
+            # Add Australian recognizers (not loaded by load_predefined_recognizers)
+            # These provide checksum validation for AU_TFN, AU_MEDICARE, AU_ABN, AU_ACN
+            registry.add_recognizer(AuMedicareRecognizer())
+            registry.add_recognizer(AuTfnRecognizer())
+            registry.add_recognizer(AuAbnRecognizer())
+            registry.add_recognizer(AuAcnRecognizer())
             
             # Custom recognizers for entities NOT in Presidio
             enhanced_address_recognizer = self._create_enhanced_address_recognizer()
@@ -157,75 +164,34 @@ class FileProcessor:
     
     def _create_australian_phone_recognizer(self) -> PatternRecognizer:
         """Create custom recognizer for Australian phone numbers."""
-        # Australian phone number patterns - comprehensive for messy CRM data
         australian_phone_patterns = [
-            # Landline patterns
+            # Landline: flexible separators (spaces, dashes, or none)
             Pattern(
                 name="au_landline",
-                regex=r'\b0[2-9]\s?\d{4}\s?\d{4}\b',       # 0X XXXX XXXX (landline)
+                regex=r'\b\(?0[2-9]\)?[-\s]?\d{4}[-\s]?\d{4}\b',
                 score=0.85
             ),
+            # Mobile: 04XX format with flexible separators
             Pattern(
-                name="au_landline_parenthetical",
-                regex=r'\b\(0[2-9]\)\s?\d{4}\s?\d{4}\b',   # (0X) XXXX XXXX
+                name="au_mobile",
+                regex=r'\b04\d{2}[-\s.]?\d{3}[-\s.]?\d{3}\b',
                 score=0.9
             ),
-            Pattern(
-                name="au_landline_dashes",
-                regex=r'\b0[2-9][-]\d{4}[-]\d{4}\b',       # 0X-XXXX-XXXX
-                score=0.85
-            ),
-            # Mobile patterns
-            Pattern(
-                name="au_mobile_standard",
-                regex=r'\b04\d{2}\s?\d{3}\s?\d{3}\b',      # 04XX XXX XXX (mobile)
-                score=0.9
-            ),
-            Pattern(
-                name="au_mobile_compact",
-                regex=r'\b04\d{8}\b',                      # 04XXXXXXXX (mobile)
-                score=0.9
-            ),
-            Pattern(
-                name="au_mobile_dashes",
-                regex=r'\b04\d{2}[-]\d{3}[-]\d{3}\b',      # 04XX-XXX-XXX
-                score=0.9
-            ),
-            Pattern(
-                name="au_mobile_dots",
-                regex=r'\b04\d{2}[\.]\d{3}[\.]\d{3}\b',    # 04XX.XXX.XXX
-                score=0.85
-            ),
-            Pattern(
-                name="au_mobile_messy",
-                regex=r'\b04\s?\d{2}\s?\d{3}\s?\d{3}\b',   # 04 XX XXX XXX (messy spacing)
-                score=0.85
-            ),
-            # International format
+            # International: +61 or 61 prefix
             Pattern(
                 name="au_international",
-                regex=r'\b\+61\s?[2-9]\s?\d{4}\s?\d{4}\b', # +61 X XXXX XXXX (international)
+                regex=r'\b\+?61[-\s]?\(?0?\)?[-\s]?[2-9][-\s]?\d{4}[-\s]?\d{4}\b',
                 score=0.95
             ),
             Pattern(
                 name="au_international_mobile",
-                regex=r'\b\+61\s?4\d{2}\s?\d{3}\s?\d{3}\b', # +61 4XX XXX XXX
+                regex=r'\b\+?61[-\s]?4\d{2}[-\s]?\d{3}[-\s]?\d{3}\b',
                 score=0.95
             ),
-            Pattern(
-                name="au_international_no_plus",
-                regex=r'\b61\s?[2-9]\s?\d{4}\s?\d{4}\b',   # 61 X XXXX XXXX (without +)
-                score=0.8
-            ),
-            Pattern(
-                name="au_international_parenthetical",
-                regex=r'\b\+61\s?\(0\)\s?[2-9]\s?\d{4}\s?\d{4}\b', # +61 (0) X XXXX XXXX
-                score=0.95
-            ),
-            # Partial/incomplete (common in CRM)
+            # Partial mobile (common in CRM - missing digits)
             Pattern(
                 name="au_mobile_partial",
-                regex=r'\b04\d{2}\s?\d{2,3}\s?\d{2,3}\b',  # Partial mobile (missing digits)
+                regex=r'\b04\d{2}[-\s]?\d{2,3}[-\s]?\d{2,3}\b',
                 score=0.6
             )
         ]
@@ -238,17 +204,19 @@ class FileProcessor:
         )
         
     def _create_generic_number_recognizer(self) -> PatternRecognizer:
-        """Create custom recognizer for any sequence of digits."""
+        """Create custom recognizer for any sequence of digits.
+        
+        NOTE: Scores are kept LOW to act as a fallback when no other
+        recognizer matches. More specific recognizers (AU_ADDRESS, 
+        AU_DRIVER_LICENSE, etc.) should have higher confidence scores.
+        """
         number_patterns = [
-            Pattern(
-                name="eight_digit_sequence",
-                regex=r"\b\d{8}\b",  # Specifically target 8-digit sequences
-                score=1.0 
-            ),
+            # General digit sequence fallback (4-16 digits)
+            # NOTE: 8-digit is handled by driver license recognizer
             Pattern(
                 name="any_digit_sequence",
-                regex=r"\b\d{1,16}\b",  # Aggresively masking 1-16 digit sequences 
-                score=0.9  
+                regex=r"\b\d{4,16}\b",
+                score=0.4
             ),
             Pattern(
                 name="formatted_numbers",
@@ -336,11 +304,19 @@ class FileProcessor:
         """Create enhanced address recognizer for Australian addresses."""
         # Australian address patterns
         australian_address_patterns = [
+            # Full address with state and postcode
             Pattern(
                 name="australian_street_address",
                 regex=r"\b\d{1,3}\s+(?:[A-Za-z]+\s+){1,5}(Street|St|Road|Rd|Avenue|Ave|Drive|Dr|Lane|Ln|Boulevard|Blvd|Circuit|Cct|Court|Ct|Place|Pl|Way|Crescent|Cres)\b,?\s*(?:[A-Za-z]+\s+){1,3}(NSW|VIC|QLD|WA|SA|TAS|ACT|NT)\s+\d{4}\b",
                 score=0.95
             ),
+            # Street address with suburb (no state/postcode)
+            Pattern(
+                name="australian_street_with_suburb",
+                regex=r"\b\d{1,3}\s+(?:[A-Za-z]+\s+){1,5}(Street|St|Road|Rd|Avenue|Ave|Drive|Dr|Lane|Ln|Boulevard|Blvd|Circuit|Cct|Court|Ct|Place|Pl|Way|Crescent|Cres)\b,?\s+[A-Za-z]+(?:\s+[A-Za-z]+){0,2}\b",
+                score=0.8
+            ),
+            # Simple street address only
             Pattern(
                 name="australian_street_simple",
                 regex=r"\b\d{1,3}\s+(?:[A-Za-z]+\s+){1,5}(Street|St|Road|Rd|Avenue|Ave|Drive|Dr|Lane|Ln|Boulevard|Blvd|Circuit|Cct|Court|Ct|Place|Pl|Way|Crescent|Cres)\b",
@@ -364,20 +340,17 @@ class FileProcessor:
     def _create_nbn_location_recognizer(self) -> PatternRecognizer:
         """Create recognizer for NBN Location IDs (LOC ID)."""
         nbn_loc_patterns = [
+            # LOC prefix pattern (covers both alphanumeric and numeric)
             Pattern(
                 name="nbn_loc_id_standard",
                 regex=r"(?i)\bLOC[-\s]?([A-Z0-9]{10,12})\b",
                 score=0.9
             ),
+            # Context-enhanced (higher confidence)
             Pattern(
                 name="nbn_loc_id_with_context",
                 regex=r"(?i)(?:location\s*id|loc\s*id|nbn\s*location)[:\s#]*(LOC)?[-\s]?([A-Z0-9]{10,12})",
                 score=0.95
-            ),
-            Pattern(
-                name="nbn_loc_id_numeric",
-                regex=r"(?i)\bLOC[-\s]?(\d{12})\b",
-                score=0.9
             )
         ]
         
@@ -423,6 +396,7 @@ class FileProcessor:
     def _create_special_phone_recognizer(self) -> PatternRecognizer:
         """Create recognizer for 1300/1800/13 special phone numbers."""
         special_phone_patterns = [
+            # 1300/1800 with flexible separators (covers compact format too)
             Pattern(
                 name="au_1300_number",
                 regex=r"\b1300[-\s]?\d{3}[-\s]?\d{3}\b",
@@ -437,16 +411,6 @@ class FileProcessor:
                 name="au_13_number",
                 regex=r"\b13[-\s]?\d{2}[-\s]?\d{2}\b",
                 score=0.85
-            ),
-            Pattern(
-                name="au_1300_compact",
-                regex=r"\b1300\d{6}\b",
-                score=0.9
-            ),
-            Pattern(
-                name="au_1800_compact",
-                regex=r"\b1800\d{6}\b",
-                score=0.9
             )
         ]
         
@@ -537,16 +501,13 @@ class FileProcessor:
     def _create_iccid_recognizer(self) -> PatternRecognizer:
         """Create recognizer for ICCID (SIM card) numbers."""
         iccid_patterns = [
-            Pattern(
-                name="iccid_australian",
-                regex=r"\b89(?:61|64)\d{15,17}\b",
-                score=0.95
-            ),
+            # With explicit context (highest confidence)
             Pattern(
                 name="iccid_with_context",
                 regex=r"(?i)(?:iccid|sim|sim\s*card|sim\s*number)[:\s#]*(89\d{17,19})",
                 score=0.95
             ),
+            # All ICCIDs start with 89 (covers Australian 8961/8964 prefixes)
             Pattern(
                 name="iccid_generic",
                 regex=r"\b89\d{17,19}\b",
@@ -607,53 +568,16 @@ class FileProcessor:
         
         Format varies by state:
         - NSW: 8 digits
-        - VIC: 9 digits or 1 letter + 8 digits
-        - QLD: 8-9 digits
-        - WA: 7 digits
-        - SA: 6 alphanumeric (e.g., S12345)
-        - TAS: 6-8 alphanumeric
-        - ACT/NT: 1-10 digits
+        Australian licenses have NO checksum validation. Detection relies on:
+        1. Context keywords (license, licence, lic, DL, etc.)
+        2. State-prefixed patterns (e.g., "license vic 060241481")
         
-        High false positive risk - context required.
+        Bare digit patterns (8-9 digits) have very low scores and require
+        strong context boost to avoid false positives on phone numbers, dates, etc.
         """
         driver_license_patterns = [
-            # NSW: 8 digits
-            Pattern(
-                name="au_dl_nsw",
-                regex=r"\b\d{8}\b",
-                score=0.3  # Low score - needs context
-            ),
-            # VIC: 9 digits or 1 letter + 8 digits
-            Pattern(
-                name="au_dl_vic_numeric",
-                regex=r"\b\d{9}\b",
-                score=0.3
-            ),
-            Pattern(
-                name="au_dl_vic_alpha",
-                regex=r"\b[A-Za-z]\d{8}\b",
-                score=0.5
-            ),
-            # QLD: 8-9 digits (covered by above patterns)
-            # WA: 7 digits
-            Pattern(
-                name="au_dl_wa",
-                regex=r"\b\d{7}\b",
-                score=0.25  # Very low - many false positives
-            ),
-            # SA: 6 alphanumeric starting with letter (e.g., S12345)
-            Pattern(
-                name="au_dl_sa",
-                regex=r"\b[A-Za-z][A-Za-z0-9]{5}\b",
-                score=0.4
-            ),
-            # TAS: 6-8 alphanumeric
-            Pattern(
-                name="au_dl_tas",
-                regex=r"\b[A-Za-z0-9]{6,8}\b",
-                score=0.2  # Very low - too generic
-            ),
-            # Context-enhanced patterns (higher scores)
+            # === HIGH CONFIDENCE: Explicit context patterns ===
+            # These have context baked into the regex itself
             Pattern(
                 name="au_dl_with_context",
                 regex=r"(?i)(?:driver[']?s?\s*licen[cs]e|DL|licen[cs]e\s*(?:no|number|num|#))[:\s#]*([A-Za-z]?\d{6,9})",
@@ -663,16 +587,58 @@ class FileProcessor:
                 name="au_dl_number_prefix",
                 regex=r"(?i)(?:licen[cs]e|DL)[:\s#]*([A-Za-z0-9]{6,10})",
                 score=0.85
-            )
+            ),
+            # State-prefixed: "license vic 060241481", "lic nsw 12345678"
+            Pattern(
+                name="au_dl_state_prefix",
+                regex=r"(?i)(?:licen[cs]e|lic\.?)\s+(?:vic|nsw|qld|sa|wa|tas|nt|act)\s+(\d{6,10})\b",
+                score=0.9
+            ),
+            # State after keyword: "vic licence 123456789"
+            Pattern(
+                name="au_dl_license_state",
+                regex=r"(?i)\b(?:vic|nsw|qld|sa|wa|tas|nt|act)\s+(?:licen[cs]e|lic\.?)\s*[:\-#]?\s*(\d{6,10})\b",
+                score=0.9
+            ),
+            
+            # === MEDIUM CONFIDENCE: Distinctive formats ===
+            # VIC alpha prefix (letter + 8 digits) - reasonably unique
+            Pattern(
+                name="au_dl_vic_alpha",
+                regex=r"\b[A-Za-z]\d{8}\b",
+                score=0.5
+            ),
+            # SA format (letter + 5 digits, e.g., S12345)
+            Pattern(
+                name="au_dl_sa",
+                regex=r"\b[A-Za-z]\d{5}\b",
+                score=0.4
+            ),
+            
+            # === LOW CONFIDENCE: Bare digit patterns ===
+            # These REQUIRE context keywords to be useful
+            # NSW/QLD: 8 digits
+            Pattern(
+                name="au_dl_8digit",
+                regex=r"\b\d{8}\b",
+                score=0.01
+            ),
+            # VIC/QLD: 9 digits
+            Pattern(
+                name="au_dl_9digit",
+                regex=r"\b\d{9}\b",
+                score=0.01
+            ),
         ]
         
         return PatternRecognizer(
             supported_entity="AU_DRIVER_LICENSE",
             patterns=driver_license_patterns,
             name="australian_driver_license_recognizer",
-            context=["driver license", "driver licence", "drivers license", "drivers licence", 
-                     "driving license", "driving licence", "DL", "licence number", 
-                     "license number", "licence no", "license no"]
+            context=["driver license", "driver licence", "drivers license", "drivers licence",
+                     "driving license", "driving licence", "DL", "licence number",
+                     "license number", "licence no", "license no",
+                     "lic", "drv", "d/l", "dl#"]
         )
     
     def _create_passport_recognizer(self) -> PatternRecognizer:
@@ -822,6 +788,10 @@ class FileProcessor:
             
             # Apply whitelist/blacklist filtering
             matches = self._apply_filters(matches)
+            
+            # Deduplicate and merge overlapping matches
+            matches = deduplicate_matches(matches)
+            matches = merge_overlapping_matches(matches)
             
             # Anonymize text
             print("Anonymizing PII...")

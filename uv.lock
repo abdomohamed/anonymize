@@ -36,6 +36,7 @@ dependencies = [
     { name = "presidio-anonymizer" },
     { name = "pyyaml" },
     { name = "spacy" },
+    { name = "tqdm" },
 ]
 
 [package.optional-dependencies]
@@ -64,6 +65,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
     { name = "spacy", specifier = ">=3.5.0" },
+    { name = "tqdm", specifier = ">=4.65.0" },
 ]
 provides-extras = ["dev", "build"]
 
