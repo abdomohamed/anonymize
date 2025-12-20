@@ -12,6 +12,7 @@ from pathlib import Path
 
 from src.config.config_manager import ConfigManager
 from src.processors.file_processor import FileProcessor
+from src.processors.csv_processor import CSVProcessor, CSVProcessResult
 
 
 def setup_logging(config: dict) -> None:
@@ -45,19 +46,25 @@ def parse_args() -> argparse.Namespace:
         epilog='''
 Examples:
   # Anonymize a single file
-  python -m cli input.txt -o output.txt
+  anonymize input.txt -o output.txt
   
   # Use specific anonymization strategy
-  python -m cli input.txt --strategy mask
+  anonymize input.txt --strategy mask
   
   # Process all files in a directory
-  python -m cli input_dir/ -o output_dir/ --dir
+  anonymize input_dir/ -o output_dir/ --dir
+  
+  # Process CSV file (single-threaded)
+  anonymize data.csv --csv -o anonymized.csv
+  
+  # Process CSV with specific columns
+  anonymize data.csv --csv --columns notes email phone
+  
+  # Process large CSV with 4 parallel workers
+  anonymize large.csv --csv --workers 4
   
   # Use custom configuration
-  python -m cli input.txt -c my_config.yaml
-  
-  # Enable verbose output
-  python -m cli input.txt -v
+  anonymize input.txt -c my_config.yaml
         '''
     )
     
@@ -84,6 +91,39 @@ Examples:
         '-r', '--recursive',
         action='store_true',
         help='Process directories recursively (only with --dir)'
+    )
+    
+    # CSV mode
+    parser.add_argument(
+        '--csv',
+        action='store_true',
+        help='Process input as CSV file'
+    )
+    
+    parser.add_argument(
+        '--columns',
+        nargs='+',
+        help='CSV columns to process (default: all columns)',
+        default=None
+    )
+    
+    parser.add_argument(
+        '--workers',
+        type=int,
+        default=None,
+        help='Number of parallel workers for CSV processing (default: auto-detect CPU cores)'
+    )
+    
+    parser.add_argument(
+        '--single-threaded',
+        action='store_true',
+        help='Disable multiprocessing, use single thread'
+    )
+    
+    parser.add_argument(
+        '--no-progress',
+        action='store_true',
+        help='Disable progress bar'
     )
     
     # Configuration
@@ -207,6 +247,15 @@ def validate_input(args: argparse.Namespace) -> bool:
         print(f"Error: Input path does not exist: {args.input}", file=sys.stderr)
         return False
     
+    # CSV mode validation
+    if args.csv:
+        if not os.path.isfile(args.input):
+            print(f"Error: --csv specified but input is not a file: {args.input}", file=sys.stderr)
+            return False
+        if not args.input.lower().endswith('.csv'):
+            print("Warning: Input file does not have .csv extension")
+        return True
+    
     # Validate directory mode
     if args.dir:
         if not os.path.isdir(args.input):
@@ -229,8 +278,35 @@ def print_results(results) -> None:
     Print processing results summary.
     
     Args:
-        results: ProcessResult or list of ProcessResult objects
+        results: ProcessResult, CSVProcessResult, or list of ProcessResult objects
     """
+    # Handle CSV results
+    if isinstance(results, CSVProcessResult):
+        print("\n" + "=" * 70)
+        print("CSV PROCESSING RESULT")
+        print("=" * 70)
+        print(f"Input: {results.input_path}")
+        print(f"Output: {results.output_path}")
+        print(f"Status: {'SUCCESS' if results.success else 'FAILED'}")
+        print(f"Workers: {results.workers_used}")
+        print(f"Rows processed: {results.rows_processed:,}")
+        if results.rows_failed > 0:
+            print(f"Rows failed: {results.rows_failed:,}")
+        print(f"PII found: {results.total_pii_found:,}")
+        if results.rows_processed > 0:
+            print(f"Avg PII/row: {results.total_pii_found / results.rows_processed:.1f}")
+        print(f"Processing time: {results.processing_time:.2f}s")
+        if results.rows_processed > 0 and results.processing_time > 0:
+            print(f"Rate: {results.rows_processed / results.processing_time:.0f} rows/sec")
+        
+        if results.errors:
+            print(f"\nErrors:")
+            for error in results.errors:
+                print(f"  - {error}")
+        
+        print("=" * 70)
+        return
+    
     if isinstance(results, list):
         # Multiple files
         print("\n" + "=" * 70)
@@ -325,13 +401,40 @@ def main():
         # Setup logging
         setup_logging(config_manager.config_data.get('logging', {}))
         
-        # Create processor
-        print("Initializing processor...")
-        processor = FileProcessor(config_manager.config_data)
-        
-        # Process files
-        if args.dir:
+        # Process based on mode
+        if args.csv:
+            # CSV mode
+            from multiprocessing import cpu_count
+            
+            # Determine workers: None=auto-detect, explicit number, or --single-threaded
+            if args.single_threaded:
+                workers = 1
+            elif args.workers is not None:
+                workers = args.workers
+            else:
+                # Auto-detect: use all CPUs
+                workers = cpu_count()
+            
+            # Cap at available CPUs
+            max_workers = cpu_count()
+            if workers > max_workers:
+                print(f"Warning: Requested {workers} workers, but only {max_workers} CPUs available")
+                workers = max_workers
+            
+            print(f"Initializing CSV processor ({workers} workers)...")
+            processor = CSVProcessor(config_manager.config_data)
+
+            results = processor.process_csv(
+                input_path=args.input,
+                output_path=args.output,
+                text_columns=args.columns,
+                workers=workers,
+                show_progress=not args.no_progress
+            )
+        elif args.dir:
             # Directory mode
+            print("Initializing processor...")
+            processor = FileProcessor(config_manager.config_data)
             results = processor.process_directory(
                 input_dir=args.input,
                 output_dir=args.output,
@@ -339,6 +442,8 @@ def main():
             )
         else:
             # Single file mode
+            print("Initializing processor...")
+            processor = FileProcessor(config_manager.config_data)
             results = processor.process_file(
                 input_path=args.input,
                 output_path=args.output
@@ -348,7 +453,10 @@ def main():
         print_results(results)
         
         # Exit with appropriate code
-        if isinstance(results, list):
+        if isinstance(results, CSVProcessResult):
+            if not results.success:
+                sys.exit(1)
+        elif isinstance(results, list):
             # Exit with error if any file failed
             if any(not r.success for r in results):
                 sys.exit(1)

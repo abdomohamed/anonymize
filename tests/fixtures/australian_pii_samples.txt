@@ -1,0 +1,150 @@
+Sample CRM Notes - Australian Telecom Company
+==============================================
+This file contains sample PII data for testing the anonymization system.
+All data is fictional and for testing purposes only.
+
+--- CUSTOMER INTERACTION LOG ---
+
+Date: 15/12/2024
+Agent: EMP12345
+Customer: John Smith
+
+=== GOVERNMENT IDs ===
+
+TFN Information:
+- Customer's TFN: 123 456 789
+- Tax file number: 987-654-321
+- tfn 456789012
+- TFN: 12345678 (legacy 8-digit)
+
+Medicare Numbers:
+- Medicare: 2123 45670 1
+- Med card: 3456 78901 2/3
+- Medicare number: 4567890123
+- medicare 5678 90123 4
+
+ABN/ACN:
+- ABN: 51 824 753 556
+- Australian Business Number: 12-345-678-901
+- abn 98765432109
+- ACN: 004 085 616
+- Australian Company Number: 123-456-789
+- acn 987654321
+
+=== NBN/TELECOM IDs ===
+
+NBN Location IDs:
+- LOC000012345678
+- Location ID: LOC123456789012
+- LOC-000098765432
+- nbn location LOC456789012345
+
+NBN Service IDs:
+- AVC000012345678
+- CVC123456
+- AVC-123456789012
+- Service Class: SC21
+- POI: 3SYD
+
+=== PHONE NUMBERS ===
+
+Australian Mobiles:
+- 0412 345 678
+- 04 1234 5678
+- 0412-345-678
+- 0412.345.678
+- +61 412 345 678
+- +61 (0) 412 345 678
+- 61 412 345 678
+
+Australian Landlines:
+- 02 9876 5432
+- (02) 9876 5432
+- 02-9876-5432
+- +61 2 9876 5432
+
+Special Numbers:
+- 1300 123 456
+- 1800 654 321
+- 1300654321
+- 13 12 34
+
+=== ADDRESSES ===
+
+Street Addresses:
+- 123 Smith Street, Sydney NSW 2000
+- Unit 5, 42 Collins Road, Melbourne VIC 3000
+- 5/42 King Avenue Brisbane QLD 4000
+
+PO Boxes:
+- PO Box 123, Sydney NSW 2000
+- P.O. Box 456
+- GPO Box 789
+- Locked Bag 100
+- Private Bag 200
+- RMB 123
+- CMB 456
+
+=== DATES OF BIRTH ===
+
+- DOB: 15/03/1985
+- D.O.B: 25-12-1990
+- Date of birth: 01.06.1978
+- Born 15 March 1985
+- born: 25 Dec 1990
+- 1985-03-15
+
+=== DEVICE IDs ===
+
+IMEI Numbers:
+- IMEI: 356938035643809
+- Device ID: 123456789012345
+- Handset: 359673012345678
+
+ICCID (SIM):
+- ICCID: 8961123456789012345
+- SIM: 89640123456789012345
+- SIM card: 8961098765432109876
+
+NTD Serials:
+- NTD-AB12CD34EF56
+- NOKA12345678901234
+- ALCL987654321098
+- 2M1234567890
+- Connection box serial: 3MABCDEF1234
+
+=== NETWORK IDs ===
+
+MAC Addresses:
+- MAC: AA:BB:CC:DD:EE:FF
+- MAC address: 11-22-33-44-55-66
+- Hardware address: AABB.CCDD.EEFF
+
+IP Addresses:
+- IP: 192.168.1.100
+- Static IP: 203.45.67.89
+
+=== PERSONAL INFO ===
+
+Names:
+- Customer name: John Smith
+- Spoke to Mary-Jane O'Brien regarding account
+- Account holder: Dr. Sarah Wilson
+
+Email Addresses:
+- Email: john.smith@example.com.au
+- Contact: customer@bigpond.com
+- test@optusnet.com.au
+
+=== FINANCIAL ===
+
+Bank Details:
+- BSB: 062-000
+- Account: 12345678
+- BSB 033-042, Account 98765432
+
+Credit Cards:
+- Card ending: ****1234
+- 4111 1111 1111 1111
+
+=== END OF SAMPLE DATA ===

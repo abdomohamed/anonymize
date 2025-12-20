@@ -10,6 +10,7 @@ dependencies = [
     "spacy>=3.5.0",
     "pyyaml>=6.0",
     "faker>=18.0.0",
+    "tqdm>=4.65.0",
 ]
 authors = [
     {name = "Your Name", email = "your.email@example.com"}
