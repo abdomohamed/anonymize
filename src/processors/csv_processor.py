@@ -7,7 +7,6 @@ multiprocessing support for large datasets.
 
 import csv
 import os
-import re
 import time
 from dataclasses import dataclass, field
 from multiprocessing import Pool, cpu_count
@@ -16,22 +15,8 @@ from typing import Optional
 
 from tqdm import tqdm
 
-from src.models import PIIMatch
 from src.utils import deduplicate_matches, merge_overlapping_matches
-
-
-def _normalize_caps_for_ner(text: str) -> str:
-    """
-    Convert ALL CAPS word sequences to Title Case for better NER detection.
-
-    Handles: JOHN SMITH, MARY O'BRIEN, MICHAEL SMITH-JONES
-    """
-    def title_case_match(match):
-        return match.group(0).title()
-
-    # Each word: 2+ letters OR apostrophe pattern (O'BRIEN) OR hyphenated (SMITH-JONES)
-    pattern = r"\b(?:[A-Z]{2,}|[A-Z]'[A-Z]+|[A-Z]+-[A-Z]+)(?:\s+(?:[A-Z]{2,}|[A-Z]'[A-Z]+|[A-Z]+-[A-Z]+)){1,2}\b"
-    return re.sub(pattern, title_case_match, text)
+from src.processors.pii_detection import analyze_text_for_pii
 
 
 @dataclass
@@ -83,31 +68,11 @@ def _process_row_worker(args: tuple) -> tuple:
 
             text = str(row[col])
 
-            # Normalize ALL CAPS for better NER detection
-            normalized_text = _normalize_caps_for_ner(text)
+            # Use shared analysis function (handles normalization and false positive filtering)
+            matches = analyze_text_for_pii(_worker_processor.analyzer, text)
 
-            # Analyze on normalized text (positions map 1:1)
-            results = _worker_processor.analyzer.analyze(
-                text=normalized_text,
-                language='en'
-            )
-
-            if not results:
+            if not matches:
                 continue
-
-            # Convert to PIIMatch
-            matches = [
-                PIIMatch(
-                    pii_type=r.entity_type,
-                    value=text[r.start:r.end],
-                    start=r.start,
-                    end=r.end,
-                    confidence=r.score,
-                    context="",
-                    detector_name="Presidio"
-                )
-                for r in results
-            ]
 
             # Dedupe and merge
             matches = deduplicate_matches(matches)
@@ -271,28 +236,11 @@ class CSVProcessor:
 
                     text = str(row[col])
 
-                    # Analyze
-                    results = self.processor.analyzer.analyze(
-                        text=text,
-                        language='en'
-                    )
+                    # Use shared analysis function (handles normalization and false positive filtering)
+                    matches = analyze_text_for_pii(self.processor.analyzer, text)
 
-                    if not results:
+                    if not matches:
                         continue
-
-                    # Convert to PIIMatch
-                    matches = [
-                        PIIMatch(
-                            pii_type=r.entity_type,
-                            value=text[r.start:r.end],
-                            start=r.start,
-                            end=r.end,
-                            confidence=r.score,
-                            context="",
-                            detector_name="Presidio"
-                        )
-                        for r in results
-                    ]
 
                     matches = deduplicate_matches(matches)
                     matches = merge_overlapping_matches(matches)

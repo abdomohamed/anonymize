@@ -5,7 +5,6 @@ This module coordinates the detection and anonymization pipeline for processing 
 """
 
 import os
-import re
 import time
 import json
 from typing import List, Dict, Any, Optional
@@ -21,6 +20,7 @@ from src.utils import (
     merge_overlapping_matches, deduplicate_matches,
     is_whitelisted, is_blacklisted, get_timestamp
 )
+from src.processors.pii_detection import analyze_text_for_pii
 from presidio_analyzer import RecognizerResult, Pattern
 from presidio_analyzer.recognizer_registry import RecognizerRegistry
 from presidio_analyzer.pattern_recognizer import PatternRecognizer
@@ -62,29 +62,6 @@ class FileProcessor:
         self.backup_original = self.processing_config.get('backup_original', False)
         self.encoding = self.processing_config.get('encoding', 'utf-8')
         self.output_suffix = self.processing_config.get('output_suffix', '_anonymized')
-
-    def _normalize_caps_for_ner(self, text: str) -> str:
-        """
-        Convert ALL CAPS word sequences to Title Case for better NER detection.
-
-        NER models are trained on Title Case names and struggle with ALL CAPS.
-        This normalizes potential name sequences while preserving character positions.
-
-        Examples:
-            "Contacted BERNARD HYNES about" -> "Contacted Bernard Hynes about"
-            "Customer MICHAEL O'BRIEN called" -> "Customer Michael O'Brien called"
-
-        Since character count is preserved, entity positions map back exactly.
-        """
-        def title_case_match(match):
-            return match.group(0).title()
-
-        # Match 2-3 consecutive ALL CAPS words
-        # Handles: JOHN SMITH, MARY O'BRIEN, MICHAEL VAN DER BERG
-        # Each word: 2+ letters OR apostrophe pattern (O'BRIEN) OR hyphenated (SMITH-JONES)
-        pattern = r"\b(?:[A-Z]{2,}|[A-Z]'[A-Z]+|[A-Z]+-[A-Z]+)(?:\s+(?:[A-Z]{2,}|[A-Z]'[A-Z]+|[A-Z]+-[A-Z]+)){1,2}\b"
-
-        return re.sub(pattern, title_case_match, text)
 
     def _init_presidio(self):
         """
@@ -900,36 +877,8 @@ class FileProcessor:
             return []
 
         try:
-            # Get configuration
-            language = self.detection_config.get('language', 'en')
-            threshold = self.detection_config.get('confidence_threshold', 0.7)
-            entities = self.detection_config.get('enabled_entities', None)
-
-            # Normalize ALL CAPS sequences for better NER detection
-            # "BERNARD HYNES" -> "Bernard Hynes" (same length, positions map 1:1)
-            normalized_text = self._normalize_caps_for_ner(text)
-
-            # Analyze with Presidio on normalized text
-            results = self.analyzer.analyze(
-                text=normalized_text,
-                language=language,
-                entities=entities,
-                score_threshold=threshold
-            )
-
-            # Convert to PIIMatch objects
-            matches = []
-            for result in results:
-                match = PIIMatch(
-                    pii_type=result.entity_type,
-                    value=text[result.start:result.end],
-                    start=result.start,
-                    end=result.end,
-                    confidence=result.score,
-                    context=self._get_context(text, result.start, result.end),
-                    detector_name="Presidio"
-                )
-                matches.append(match)
+            # Use shared analysis function (handles normalization and false positive filtering)
+            matches = analyze_text_for_pii(self.analyzer, text)
 
             print(f"  Presidio: found {len(matches)} PII instances")
             return matches
