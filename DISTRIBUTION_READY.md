@@ -4,21 +4,21 @@
 
 Your standalone executable has been built and is ready for distribution:
 
-**Location**: `dist/anonymize`  
-**Size**: 110 MB  
+**Location**: `dist/anonymize`
+**Size**: 110 MB
 **Platform**: Linux x86-64
 
 ## What's Included in the Executable
 
 The executable bundles everything needed to run the PII anonymization tool:
 
-✅ Python 3.12 runtime  
-✅ Presidio (analyzer + anonymizer)  
-✅ spaCy + en_core_web_sm model  
-✅ Faker library  
-✅ All dependencies (pyyaml, etc.)  
-✅ Your application code  
-✅ Configuration files  
+✅ Python 3.12 runtime
+✅ Presidio (analyzer + anonymizer)
+✅ spaCy + en_core_web_lg model
+✅ Faker library
+✅ All dependencies (pyyaml, etc.)
+✅ Your application code
+✅ Configuration files
 
 ## Distribution Instructions
 
@@ -34,8 +34,8 @@ The executable bundles everything needed to run the PII anonymization tool:
    ./anonymize input.txt -o output.txt
    ```
 
-**No Python installation required!**  
-**No package downloads needed!**  
+**No Python installation required!**
+**No package downloads needed!**
 **No setup scripts!**
 
 ### Sharing Methods
@@ -55,7 +55,7 @@ $ ./dist/anonymize --help
 
 $ ./dist/anonymize examples/sample_input.txt -o output.txt
 # ✓ Loads successfully
-# ✓ Presidio initializes correctly  
+# ✓ Presidio initializes correctly
 # ✓ spaCy model loads properly
 # ✓ Detects PII (found 27 instances in test)
 # ✓ All core functionality working
@@ -95,7 +95,7 @@ build/                   # Build artifacts (can be deleted)
       └── xref-anonymize.html
 
 anonymize.spec           # PyInstaller configuration
-hook-en_core_web_sm.py   # Custom hook for spaCy model
+hook-en_core_web_lg.py   # Custom hook for spaCy model
 build.sh                 # Build script (Linux/macOS)
 build.ps1                # Build script (Windows)
 ```

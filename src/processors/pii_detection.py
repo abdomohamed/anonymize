@@ -13,42 +13,13 @@ if TYPE_CHECKING:
 
 from src.models import PIIMatch
 from src.utils import get_context
+from src.config.config_manager import ConfigManager
 
 
-# Words that spaCy NER incorrectly identifies as PERSON/ORGANIZATION
-# Used to filter false positives during PII detection
-FALSE_POSITIVE_WORDS = frozenset({
-    # Technical terms misidentified as PERSON
-    'upload', 'download', 'sync', 'backup', 'update', 'install',
-    'login', 'logout', 'signup', 'signin', 'reset', 'refresh',
-    # Business terms misidentified as ORG
-    'credit', 'debit', 'account', 'balance', 'payment', 'invoice',
-    'service', 'support', 'sales', 'billing', 'admin', 'system',
-    'customer', 'client', 'user', 'member',
-    # Hardware/device terms misidentified as ORG
-    'modem', 'router', 'gateway', 'nbn', 'handset', 'sim',
-    # Speed/network terms
-    'speed', 'ping', 'latency', 'bandwidth', 'upstream', 'downstream',
-    'mbps', 'kbps', 'gbps',
-    # Telco/system-specific terms
-    'telstra', 'console', 'mica', 'bill', 'siebel', 'flexcab',
-    'debitors', 'pega', 'braintree', 'salesforce',
-    # Australian state abbreviations (misidentified as ORG)
-    'nsw', 'vic', 'qld', 'wa', 'sa', 'tas', 'act', 'nt',
-    # Australian timezone abbreviations
-    'aest', 'aedt', 'acst', 'acdt', 'awst', 'awdt',
-    # Common words misidentified as ORG
-    'medicare', 'centrelink', 'driver', 'license', 'licence',
-    # Regulatory bodies
-    'tio', 'acma',
-    # Payment/billing terms
-    'bpay', 'paypal',
-    # Status/workflow words
-    'escalated', 'provisioning', 'activated', 'cancelled', 'canceled',
-    'retention', 'winback', 'churn',
-    # Other common abbreviations
-    'dob', 'eta', 'asap', 'tba', 'tbd', 'fyi', 'pm', 'am',
-})
+# Load false positive words from config at module level
+_config = ConfigManager.load()
+_fp_words_list = _config.config_data.get('false_positive_words', [])
+FALSE_POSITIVE_WORDS: frozenset[str] = frozenset(w.lower() for w in _fp_words_list)
 
 
 def normalize_caps_for_ner(text: str) -> str:
@@ -79,11 +50,16 @@ def normalize_caps_for_ner(text: str) -> str:
     return re.sub(pattern, title_case_match, text)
 
 
-def analyze_text_for_pii(analyzer: "AnalyzerEngine", text: str, language: str = 'en') -> list[PIIMatch]:
+def analyze_text_for_pii(
+    analyzer: "AnalyzerEngine",
+    text: str,
+    language: str = 'en',
+) -> list[PIIMatch]:
     """
     Analyze text for PII using Presidio analyzer with normalization and false positive filtering.
 
     This is the shared detection function used by both file and CSV processors.
+    False positive words are loaded from config at module import time.
 
     Args:
         analyzer: Presidio AnalyzerEngine instance
@@ -125,32 +101,47 @@ def analyze_text_for_pii(analyzer: "AnalyzerEngine", text: str, language: str = 
         matched_value = text[result.start:result.end]
         matched_lower = matched_value.lower()
 
-        # Skip known false positives for PERSON/ORG entities
-        if result.entity_type in ('PERSON', 'ORGANIZATION'):
+        # Skip known false positives for PERSON/ORG/LOCATION entities
+        if result.entity_type in ('PERSON', 'ORGANIZATION', 'LOCATION'):
             matched_words = matched_lower.split()
-            if any(word in FALSE_POSITIVE_WORDS for word in matched_words):
-                continue
-
-            # Fix spaCy misclassification: ORG that follows a title is likely PERSON
-            # e.g., "DR SMITH-JONES" where spaCy only detects "SMITH-JONES" as ORG
-            if result.entity_type == 'ORGANIZATION':
-                # Check if preceded by a title
-                prefix_start = max(0, result.start - 10)
-                prefix_text = text[prefix_start:result.start].lower().split()
-                if prefix_text and prefix_text[-1].rstrip('.') in TITLE_PREFIXES:
-                    # Reclassify as PERSON
-                    result = result._replace(entity_type='PERSON') if hasattr(result, '_replace') else result
-                    # For RecognizerResult, we need to create a new match with PERSON type
-                    matches.append(PIIMatch(
-                        pii_type='PERSON',
-                        value=matched_value,
-                        start=result.start,
-                        end=result.end,
-                        confidence=result.score,
-                        context=get_context(text, result.start, result.end),
-                        detector_name="Presidio"
-                    ))
+            # For PERSON: only skip if the FIRST word is a false positive
+            # This allows "felicity cac" (name + abbreviation) to pass through
+            # For ORG/LOCATION: skip if ANY word is a false positive
+            if result.entity_type == 'PERSON':
+                if matched_words and matched_words[0] in FALSE_POSITIVE_WORDS:
                     continue
+            else:
+                if any(word in FALSE_POSITIVE_WORDS for word in matched_words):
+                    continue
+
+        # Reclassify ORGANIZATION/LOCATION as PERSON when it looks like a name
+        # spaCy often misclassifies names in business context (e.g., "Bernard" as ORG)
+        if result.entity_type in ('ORGANIZATION', 'LOCATION'):
+            # Check if preceded by a title - definitely a PERSON
+            prefix_start = max(0, result.start - 10)
+            prefix_text = text[prefix_start:result.start].lower().split()
+            preceded_by_title = prefix_text and prefix_text[-1].rstrip('.') in TITLE_PREFIXES
+
+            # Single capitalized word that looks like a name (not all caps tech term)
+            is_single_name = (
+                len(matched_words) == 1 and
+                matched_value[0].isupper() and
+                not matched_value.isupper() and  # Not ALL CAPS (likely acronym)
+                len(matched_value) > 2  # Not short abbreviation
+            )
+
+            if preceded_by_title or is_single_name:
+                # Reclassify as PERSON
+                matches.append(PIIMatch(
+                    pii_type='PERSON',
+                    value=matched_value,
+                    start=result.start,
+                    end=result.end,
+                    confidence=result.score,
+                    context=get_context(text, result.start, result.end),
+                    detector_name="Presidio"
+                ))
+                continue
 
         matches.append(PIIMatch(
             pii_type=result.entity_type,

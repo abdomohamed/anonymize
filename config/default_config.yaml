@@ -155,6 +155,141 @@ blacklist:
   - "test@test.com"
   - "123-45-6789"
 
+# False positive words: terms that spaCy NER incorrectly identifies as PERSON/ORGANIZATION
+# These words will be filtered out when detected as names or organizations
+# Add domain-specific terms that shouldn't be anonymized
+false_positive_words:
+  # Technical terms misidentified as PERSON
+  - upload
+  - download
+  - sync
+  - backup
+  - update
+  - install
+  - login
+  - logout
+  - signup
+  - signin
+  - reset
+  - refresh
+  # Business terms misidentified as ORG
+  - credit
+  - debit
+  - account
+  - balance
+  - payment
+  - invoice
+  - service
+  - support
+  - sales
+  - billing
+  - admin
+  - system
+  - customer
+  - client
+  - user
+  - member
+  # Hardware/device terms
+  - modem
+  - router
+  - gateway
+  - nbn
+  - handset
+  - sim
+  # Speed/network terms
+  - speed
+  - ping
+  - latency
+  - bandwidth
+  - upstream
+  - downstream
+  - mbps
+  - kbps
+  - gbps
+  # Telco/system-specific terms
+  - telstra
+  - console
+  - mica
+  - bill
+  - siebel
+  - flexcab
+  - debitors
+  - pega
+  - braintree
+  - salesforce
+  # Australian state abbreviations
+  - nsw
+  - vic
+  - qld
+  - wa
+  - sa
+  - tas
+  - act
+  - nt
+  # Australian timezone abbreviations
+  - aest
+  - aedt
+  - acst
+  - acdt
+  - awst
+  - awdt
+  # Common words misidentified as ORG
+  - medicare
+  - centrelink
+  - driver
+  - license
+  - licence
+  # Regulatory bodies
+  - tio
+  - acma
+  # Payment/billing terms
+  - bpay
+  - paypal
+  # Status/workflow words
+  - escalated
+  - provisioning
+  - activated
+  - cancelled
+  - canceled
+  - retention
+  - winback
+  - churn
+  # Common abbreviations
+  - dob
+  - eta
+  - asap
+  - tba
+  - tbd
+  - fyi
+  - pm
+  - am
+  # Customer service abbreviations
+  - cx
+  - cust
+  - otc
+  - cac
+  # Network technology terms
+  - fttn
+  - fttp
+  - fttc
+  - fttb
+  - hfc
+  - adsl
+  - vdsl
+  # Workflow/process terms
+  - action
+  - flow
+  - guided
+  - additional
+  - assistance
+  - retain
+  # Form/checkbox patterns
+  - "y/n"
+  - "y"
+  - "n"
+  - "yes"
+  - "no"
+
 # Logging configuration
 logging:
   # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
