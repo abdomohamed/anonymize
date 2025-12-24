@@ -25,6 +25,8 @@ FALSE_POSITIVE_WORDS = frozenset({
     'credit', 'debit', 'account', 'balance', 'payment', 'invoice',
     'service', 'support', 'sales', 'billing', 'admin', 'system',
     'customer', 'client', 'user', 'member',
+    # Hardware/device terms misidentified as ORG
+    'modem', 'router', 'gateway', 'nbn', 'handset', 'sim',
     # Speed/network terms
     'speed', 'ping', 'latency', 'bandwidth', 'upstream', 'downstream',
     'mbps', 'kbps', 'gbps',
@@ -57,7 +59,7 @@ def normalize_caps_for_ner(text: str) -> str:
     false positives on technical terms like "UPLOAD SPEED" or "DOWNLOAD SPEED".
 
     Examples:
-        "Contacted MR BERNARD HYNES about" -> "Contacted Mr Bernard Hynes about"
+        "Contacted MR BERNARD FANNING about" -> "Contacted Mr Bernard Fanning about"
         "Customer MS JANE O'BRIEN called" -> "Customer Ms Jane O'Brien called"
         "DR SMITH-JONES arrived" -> "Dr Smith-Jones arrived"
         "UPLOAD SPEED 24.95" -> unchanged (no title prefix)
