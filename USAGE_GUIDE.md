@@ -2,12 +2,14 @@
 
 ## Installation
 
+**With UV (recommended):**
 ```bash
-# Install dependencies
-pip install presidio-analyzer presidio-anonymizer pyyaml faker
+uv sync
+```
 
-# Download spaCy model for name detection
-python -m spacy download en_core_web_sm
+**With pip:**
+```bash
+pip install -e .
 ```
 
 ## Basic Usage Examples
@@ -279,7 +281,7 @@ Solution: pip install presidio-analyzer
 
 **Issue**: "spaCy model not found"
 ```bash
-Solution: python -m spacy download en_core_web_sm
+Solution: uv sync  # or: pip install -e .
 ```
 
 **Issue**: No PII detected

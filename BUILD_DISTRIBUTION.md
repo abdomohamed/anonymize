@@ -62,7 +62,7 @@ Expected size: ~200-400 MB (includes Python runtime, all dependencies, and spaCy
 ⚠️ **Important**: The executable is platform-specific!
 
 - Build on **Linux** → Works on Linux
-- Build on **macOS** → Works on macOS  
+- Build on **macOS** → Works on macOS
 - Build on **Windows** → Works on Windows
 
 To support multiple platforms, you'll need to build on each platform separately.
@@ -138,9 +138,9 @@ cat test_output.txt
 **Solution**: The spec file may be missing dependencies. Add them to `hiddenimports` in `anonymize.spec`
 
 ### Issue: "spaCy model not found"
-**Solution**: Make sure the spaCy model is installed before building:
+**Solution**: Run `uv sync` to install all dependencies including the spaCy model:
 ```bash
-uv pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
+uv sync
 ```
 
 ### Issue: Build fails with memory error
@@ -179,7 +179,7 @@ FROM python:3.11-slim
 WORKDIR /app
 COPY . .
 RUN pip install -e .
-RUN python -m spacy download en_core_web_sm
+RUN python -m spacy download en_core_web_lg
 ENTRYPOINT ["python", "-m", "src.cli"]
 ```
 

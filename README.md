@@ -48,16 +48,14 @@ The setup script automatically:
 
 ### Manual Installation
 
-**With UV:**
+**With UV (recommended):**
 ```bash
 uv sync
-uv pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
 ```
 
 **With pip:**
 ```bash
 pip install -e .
-python -m spacy download en_core_web_sm
 ```
 
 ### Run the Tool
@@ -93,6 +91,51 @@ uv run anonymize input.txt --strategy hash
 ```bash
 # Process directory
 uv run anonymize input_dir/ -o output_dir/ --dir --recursive
+```
+
+### CSV Processing
+
+Process CSV files with specific columns containing PII:
+
+```bash
+# Process specific columns in a CSV
+uv run anonymize data.csv --csv --columns notes email_body -o anonymized.csv
+
+# Process all text columns
+uv run anonymize data.csv --csv -o anonymized.csv
+
+# Use multiple workers for large files (parallel processing)
+uv run anonymize large_data.csv --csv --columns CommentBody --workers 4
+
+# Single-threaded processing (useful for debugging)
+uv run anonymize data.csv --csv --single-threaded
+```
+
+**CSV Features:**
+- 🚀 **Parallel processing**: Use `--workers N` to process large files faster
+- 📊 **Selective columns**: Only anonymize columns you specify with `--columns`
+- 📈 **Progress bar**: Visual progress for large datasets (disable with `--no-progress`)
+- ✅ **Preserves structure**: All other columns remain unchanged
+
+**Example:**
+
+Input CSV (`customers.csv`):
+```csv
+id,name,notes,created_at
+1,John,Call from john@email.com about billing,2024-01-15
+2,Jane,Customer phone: 555-123-4567,2024-01-16
+```
+
+Command:
+```bash
+uv run anonymize customers.csv --csv --columns notes -o customers_safe.csv
+```
+
+Output CSV (`customers_safe.csv`):
+```csv
+id,name,notes,created_at
+1,John,Call from [EMAIL_ADDRESS_REDACTED] about billing,2024-01-15
+2,Jane,Customer phone: [PHONE_NUMBER_REDACTED],2024-01-16
 ```
 
 ### Selective Detection
@@ -180,12 +223,12 @@ Contact [EMAIL_REDACTED] or support@company.com
 ## Command-Line Reference
 
 ```
-usage: cli.py [-h] [-o OUTPUT] [--dir] [-r] [-c CONFIG]
-              [--strategy {redact,mask,replace,hash}]
-              [--detectors {email,phone,ssn,credit_card,ip_address,name} ...]
-              [--confidence CONFIDENCE] [--no-audit] [--backup] [-v]
-              [--version]
-              input
+usage: anonymize [-h] [-o OUTPUT] [--dir] [-r] [--csv] [--columns COLUMNS ...]
+                 [--workers WORKERS] [--single-threaded] [--no-progress]
+                 [-c CONFIG] [--strategy {redact,mask,replace,hash}]
+                 [--entities ENTITIES ...] [--confidence CONFIDENCE]
+                 [--no-audit] [--backup] [-v] [--version]
+                 input
 
 PII Anonymization Tool
 
@@ -198,12 +241,17 @@ optional arguments:
                         Output file or directory path
   --dir                 Process directory instead of single file
   -r, --recursive       Process directories recursively
+  --csv                 Process input as CSV file
+  --columns COLUMNS ... CSV columns to process (default: all columns)
+  --workers WORKERS     Number of parallel workers for CSV (default: CPU cores)
+  --single-threaded     Disable multiprocessing, use single thread
+  --no-progress         Disable progress bar
   -c CONFIG, --config CONFIG
                         Path to custom configuration file (YAML)
   --strategy {redact,mask,replace,hash}
                         Anonymization strategy to use
-  --detectors DETECTORS [DETECTORS ...]
-                        Specific detectors to enable
+  --entities ENTITIES ...
+                        Specific entity types to detect
   --confidence CONFIDENCE
                         Confidence threshold for detection (0.0-1.0)
   --no-audit            Disable audit log generation

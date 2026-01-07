@@ -5,20 +5,20 @@ detection:
   # Presidio configuration
   # Language for detection
   language: "en"
-  
+
   # Minimum confidence threshold for detection (0.0 - 1.0)
   confidence_threshold: 0.7
-  
+
   # Specific entity types to detect (null/empty = all)
   # Available entities: EMAIL_ADDRESS, PHONE_NUMBER, CREDIT_CARD, CRYPTO,
   # DATE_TIME, IBAN_CODE, IP_ADDRESS, LOCATION, PERSON, US_SSN, US_BANK_NUMBER,
   # US_DRIVER_LICENSE, US_ITIN, US_PASSPORT, UK_NHS, and more
   # See: https://microsoft.github.io/presidio/supported_entities/
-  # 
+  #
   # Australian-specific entities:
   # - Presidio built-in (with checksum validation): AU_TFN, AU_MEDICARE, AU_ABN, AU_ACN
-  # - Custom recognizers: AU_NBN_LOC_ID, AU_NBN_SERVICE_ID, AU_SPECIAL_PHONE, 
-  #   AU_PO_BOX, AU_NTD_SERIAL, AU_PHONE_NUMBER, AU_ADDRESS, IMEI, ICCID, 
+  # - Custom recognizers: AU_NBN_LOC_ID, AU_NBN_SERVICE_ID, AU_SPECIAL_PHONE,
+  #   AU_PO_BOX, AU_NTD_SERIAL, AU_PHONE_NUMBER, AU_ADDRESS, IMEI, ICCID,
   #   DATE_OF_BIRTH, GENERIC_NUMBER
   enabled_entities:
     # Standard Presidio entities
@@ -48,12 +48,12 @@ detection:
     - ICCID
     - AU_NTD_SERIAL
     # Generic catch-all (use with caution - high false positive risk)
-    - GENERIC_NUMBER
+    # - GENERIC_NUMBER
     # Australian Identity Documents (custom)
     - AU_DRIVER_LICENSE
     - AU_PASSPORT
     - AU_CENTRELINK_CRN
-  
+
   # Set to null or remove to detect all entity types
   # enabled_entities: null
 
@@ -61,55 +61,55 @@ detection:
 anonymization:
   # Primary strategy: redact, mask, replace, or hash
   strategy: "redact"
-  
+
   # Redaction settings
   redact:
     # Token to use for redaction
     token: "[REDACTED]"
-    
+
     # Use type-specific tokens (e.g., [EMAIL_REDACTED], [PHONE_REDACTED])
     type_specific: true
-  
+
   # Masking settings
   mask:
     # Character to use for masking
     mask_char: "*"
-    
+
     # Number of visible characters for email (from start)
     email_visible_chars: 1
-    
+
     # Number of visible characters for phone (area code)
     phone_visible_chars: 3
-    
+
     # Number of visible digits for SSN (last 4)
     ssn_visible_chars: 4
-    
+
     # Number of visible digits for credit card (last 4)
     credit_card_visible_chars: 4
-  
+
   # Replacement settings (using Faker)
   replace:
     # Locale for fake data generation
     locale: "en_US"
-    
+
     # Seed for reproducible fake data (null for random)
     seed: null
-    
+
     # Preserve format (e.g., same email domain, same area code)
     preserve_format: true
-  
+
   # Hashing settings
   hash:
     # Hash algorithm to use
     algorithm: "sha256"
-    
+
     # Include PII type prefix in hash output
     prefix: true
-    
+
     # Salt for hashing (use environment variable for security)
     # Set via PII_ANONYMIZE_SALT environment variable
     salt: "default_salt_change_in_production"
-    
+
     # Output format: full hash or truncated
     truncate: 8  # Number of characters to keep
 
@@ -117,22 +117,22 @@ anonymization:
 processing:
   # Batch size for processing large files (lines)
   batch_size: 1000
-  
+
   # Preserve original formatting (whitespace, newlines)
   preserve_formatting: true
-  
+
   # Create audit log with anonymization details
   create_audit_log: true
-  
+
   # Backup original file before anonymization
   backup_original: false
-  
+
   # Output encoding
   encoding: "utf-8"
-  
+
   # Skip files that are already anonymized (based on extension)
   skip_anonymized: true
-  
+
   # Extension to add to output files
   output_suffix: "_anonymized"
 
@@ -142,11 +142,11 @@ whitelist:
   emails:
     - "noreply@example.com"
     - "support@company.com"
-  
+
   domains:
     - "example.com"
     - "localhost"
-  
+
   patterns: []
 
 # Blacklist: values that should ALWAYS be anonymized
@@ -155,16 +155,151 @@ blacklist:
   - "test@test.com"
   - "123-45-6789"
 
+# False positive words: terms that spaCy NER incorrectly identifies as PERSON/ORGANIZATION
+# These words will be filtered out when detected as names or organizations
+# Add domain-specific terms that shouldn't be anonymized
+false_positive_words:
+  # Technical terms misidentified as PERSON
+  - upload
+  - download
+  - sync
+  - backup
+  - update
+  - install
+  - login
+  - logout
+  - signup
+  - signin
+  - reset
+  - refresh
+  # Business terms misidentified as ORG
+  - credit
+  - debit
+  - account
+  - balance
+  - payment
+  - invoice
+  - service
+  - support
+  - sales
+  - billing
+  - admin
+  - system
+  - customer
+  - client
+  - user
+  - member
+  # Hardware/device terms
+  - modem
+  - router
+  - gateway
+  - nbn
+  - handset
+  - sim
+  # Speed/network terms
+  - speed
+  - ping
+  - latency
+  - bandwidth
+  - upstream
+  - downstream
+  - mbps
+  - kbps
+  - gbps
+  # Telco/system-specific terms
+  - telstra
+  - console
+  - mica
+  - bill
+  - siebel
+  - flexcab
+  - debitors
+  - pega
+  - braintree
+  - salesforce
+  # Australian state abbreviations
+  - nsw
+  - vic
+  - qld
+  - wa
+  - sa
+  - tas
+  - act
+  - nt
+  # Australian timezone abbreviations
+  - aest
+  - aedt
+  - acst
+  - acdt
+  - awst
+  - awdt
+  # Common words misidentified as ORG
+  - medicare
+  - centrelink
+  - driver
+  - license
+  - licence
+  # Regulatory bodies
+  - tio
+  - acma
+  # Payment/billing terms
+  - bpay
+  - paypal
+  # Status/workflow words
+  - escalated
+  - provisioning
+  - activated
+  - cancelled
+  - canceled
+  - retention
+  - winback
+  - churn
+  # Common abbreviations
+  - dob
+  - eta
+  - asap
+  - tba
+  - tbd
+  - fyi
+  - pm
+  - am
+  # Customer service abbreviations
+  - cx
+  - cust
+  - otc
+  - cac
+  # Network technology terms
+  - fttn
+  - fttp
+  - fttc
+  - fttb
+  - hfc
+  - adsl
+  - vdsl
+  # Workflow/process terms
+  - action
+  - flow
+  - guided
+  - additional
+  - assistance
+  - retain
+  # Form/checkbox patterns
+  - "y/n"
+  - "y"
+  - "n"
+  - "yes"
+  - "no"
+
 # Logging configuration
 logging:
   # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
   level: "INFO"
-  
+
   # Log format
   format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-  
+
   # Log to file (null for console only)
   file: null
-  
+
   # Include detection details in logs
   verbose: false
