@@ -303,3 +303,51 @@ logging:
 
   # Include detection details in logs
   verbose: false
+
+# LLM Second-Pass Detection (Optional)
+# Provides an additional detection pass using LLM to catch PII missed by spaCy/Presidio
+llm_detection:
+  # Enable/disable LLM second pass
+  enabled: false
+
+  # Base URL for API (determines provider)
+  # Azure:    https://your-resource.openai.azure.com/openai/v1
+  # OpenAI:   https://api.openai.com/v1  (or omit for default)
+  # Ollama:   http://localhost:11434/v1
+  # Note: If URL contains 'azure', managed identity is tried first automatically
+  base_url: "${OPENAI_ENDPOINT}"
+
+  # Model or deployment name
+  model: "gpt-4.1-mini"
+
+  # API key (for Azure: falls back to this if managed identity fails)
+  # Use environment variable reference for security
+  api_key: "${OPENAI_API_KEY}"
+
+  # Detection Settings
+  settings:
+    # Maximum concurrent requests (for async batch processing)
+    # With 1000 RPM limit, 150 concurrent saturates the rate limit well
+    max_concurrent: 150
+
+    # Maximum retries on failure (built into openai client)
+    max_retries: 3
+
+    # Timeout per request (seconds)
+    timeout: 30
+
+  # System prompt for PII detection
+  # Customize to match your specific PII detection needs
+  system_prompt: |
+    Find PII in text. Return JSON array only.
+
+    DETECT: names, addresses, partial addresses, phones, emails, australian gov IDs, NBN codes (AVC/LOC)
+
+    IGNORE: dates (unless DOB), account/case numbers, [BRACKETS_REDACTED] content
+
+    If a partial value is found, include the [BRACKETS_REDACTED] in the returned value so it can be fully redacted and described.
+
+    Return ONLY sensitive value, not context. Example: "medicare 2123456701" → v="2123456701"
+
+    Format: [{"t":"TYPE","v":"value"}]
+    Empty: []

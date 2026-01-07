@@ -101,8 +101,8 @@ def analyze_text_for_pii(
         matched_value = text[result.start:result.end]
         matched_lower = matched_value.lower()
 
-        # Skip known false positives for PERSON/ORG/LOCATION entities
-        if result.entity_type in ('PERSON', 'ORGANIZATION', 'LOCATION'):
+        # Skip known false positives for PERSON/ORG/LOCATION/NRP entities
+        if result.entity_type in ('PERSON', 'ORGANIZATION', 'LOCATION', 'NRP'):
             matched_words = matched_lower.split()
             # For PERSON: only skip if the FIRST word is a false positive
             # This allows "felicity cac" (name + abbreviation) to pass through
@@ -154,3 +154,34 @@ def analyze_text_for_pii(
         ))
 
     return matches
+
+
+def apply_llm_second_pass(
+    texts: list[str],
+    llm_config: dict,
+    show_progress: bool = True,
+) -> list[list[PIIMatch]]:
+    """
+    Apply LLM second-pass detection to a batch of texts using concurrent requests.
+
+    Uses async concurrent processing for high throughput while respecting rate limits.
+
+    Args:
+        texts: List of texts to analyze (typically already partially redacted)
+        llm_config: LLM configuration dictionary
+        show_progress: Show progress information
+
+    Returns:
+        List of PIIMatch lists, one per input text
+    """
+    from src.llm import detect_pii_batch_concurrent
+
+    settings = llm_config.get('settings', {})
+    max_concurrent = settings.get('max_concurrent', 50)
+
+    return detect_pii_batch_concurrent(
+        config=llm_config,
+        texts=texts,
+        max_concurrent=max_concurrent,
+        show_progress=show_progress,
+    )
