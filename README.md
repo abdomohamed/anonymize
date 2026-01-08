@@ -12,7 +12,29 @@ Detect and anonymize Personally Identifiable Information (PII) in text files usi
 
 ## Distribution Options
 
-### Option 1: Standalone Executable (Recommended for Restricted Environments)
+### Option 1: Dev Container (Recommended for Development)
+
+The fastest way to get started is using the included **Dev Container**, which provides a fully configured development environment with all dependencies pre-installed.
+
+**Requirements:** [VS Code](https://code.visualstudio.com/) + [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) + Docker
+
+```bash
+# Clone and open in VS Code
+git clone https://github.com/abdomohamed/anonymize.git
+code anonymize
+```
+
+When prompted, click **"Reopen in Container"** (or use Command Palette → "Dev Containers: Reopen in Container").
+
+The dev container automatically:
+- ✅ Installs Python, UV, Git, GitHub CLI, Azure CLI, Docker
+- ✅ Installs all dependencies on startup (`uv sync --all-extras`)
+- ✅ Configures VS Code extensions (Python, Pylance, Copilot, etc.)
+- ✅ Sets up testing integration
+
+You're ready to go immediately after the container builds!
+
+### Option 2: Standalone Executable (Recommended for Restricted Environments)
 
 If you need to distribute this tool to users who cannot install Python or download packages, you can build a standalone executable. See **[BUILD_DISTRIBUTION.md](BUILD_DISTRIBUTION.md)** for detailed instructions.
 
@@ -25,9 +47,9 @@ If you need to distribute this tool to users who cannot install Python or downlo
 
 This creates a single executable file in `dist/` that can be shared and run without any installation!
 
-### Option 2: Standard Installation
+### Option 3: Standard Installation
 
-### Quick Setup (Recommended)
+### Quick Setup
 
 **Requirements:** Python 3.9+
 
@@ -173,6 +195,103 @@ Use it:
 uv run anonymize input.txt -c my_config.yaml
 ```
 
+## LLM Second Pass (Optional)
+
+The tool supports an optional LLM-powered second pass that catches PII missed by Presidio/spaCy. This is especially useful for:
+- Context-dependent PII (partial addresses, names in unusual formats)
+- Domain-specific identifiers (NBN service IDs, telecom codes)
+- Edge cases that rule-based detection misses
+
+### Enabling LLM Detection
+
+Add `--llm` flag to enable the second pass:
+
+```bash
+# Enable LLM second pass
+uv run anonymize data.csv --csv --columns notes --llm -o output.csv
+```
+
+### Configuration
+
+#### Option 1: Environment Variables (Recommended)
+
+Create a `.env` file in your project root:
+
+```bash
+# For Azure OpenAI with Managed Identity (recommended for Azure)
+OPENAI_ENDPOINT=https://your-resource.openai.azure.com/openai/v1
+
+# For Azure OpenAI with API Key (fallback if managed identity fails)
+OPENAI_ENDPOINT=https://your-resource.openai.azure.com/openai/v1
+OPENAI_API_KEY=your-api-key
+
+# For OpenAI API directly
+OPENAI_API_KEY=sk-your-api-key
+
+# For local models (Ollama, etc.)
+OPENAI_ENDPOINT=http://localhost:11434/v1
+```
+
+#### Option 2: Configuration File
+
+Edit `config/default_config.yaml`:
+
+```yaml
+llm_detection:
+  enabled: true
+
+  # Azure OpenAI (managed identity auto-detected from 'azure' in URL)
+  base_url: "${OPENAI_ENDPOINT}"
+  model: "gpt-4o-mini"
+
+  # API key (used as fallback if managed identity fails)
+  api_key: "${OPENAI_API_KEY}"
+
+  settings:
+    max_concurrent: 750    # Concurrent requests for batch processing
+    max_retries: 3
+    timeout: 30
+```
+
+### Authentication Methods
+
+| Provider | Configuration | Notes |
+|----------|--------------|-------|
+| **Azure OpenAI (Managed Identity)** | Set `base_url` containing "azure" | Auto-detected, no API key needed |
+| **Azure OpenAI (API Key)** | Set `base_url` + `api_key` | Fallback if MI fails |
+| **OpenAI** | Set `api_key` only | Uses default OpenAI endpoint |
+| **Local (Ollama)** | Set `base_url` to local endpoint | No API key required |
+
+### Azure Managed Identity Setup
+
+For Azure deployments, managed identity is the most secure option:
+
+1. **Enable managed identity** on your compute (VM, Container App, etc.)
+2. **Grant access** to your Azure OpenAI resource:
+   - Go to Azure OpenAI resource → Access Control (IAM)
+   - Add role assignment: "Cognitive Services OpenAI User"
+   - Assign to your managed identity
+3. **Configure endpoint** in `.env`:
+   ```bash
+   OPENAI_ENDPOINT=https://your-resource.openai.azure.com/openai/v1
+   ```
+
+The tool will automatically use managed identity when it detects "azure" in the URL.
+
+### Local Development with Azure
+
+When developing locally (including in the dev container), you need to authenticate with Azure CLI for managed identity to work:
+
+```bash
+# Login to Azure (opens browser for authentication)
+az login
+
+# Verify you're logged in
+az account show
+```
+
+The `DefaultAzureCredential` used by the tool will automatically pick up your Azure CLI credentials when running locally. In production (Azure VMs, Container Apps, etc.), it uses the actual managed identity instead.
+
 ## Example Output
 
 **Input:**
@@ -225,7 +344,7 @@ Contact [EMAIL_REDACTED] or support@company.com
 ```
 usage: anonymize [-h] [-o OUTPUT] [--dir] [-r] [--csv] [--columns COLUMNS ...]
                  [--workers WORKERS] [--single-threaded] [--no-progress]
-                 [-c CONFIG] [--strategy {redact,mask,replace,hash}]
+                 [--llm] [-c CONFIG] [--strategy {redact,mask,replace,hash}]
                  [--entities ENTITIES ...] [--confidence CONFIDENCE]
                  [--no-audit] [--backup] [-v] [--version]
                  input
@@ -246,6 +365,7 @@ optional arguments:
   --workers WORKERS     Number of parallel workers for CSV (default: CPU cores)
   --single-threaded     Disable multiprocessing, use single thread
   --no-progress         Disable progress bar
+  --llm                 Enable LLM second pass for additional PII detection
   -c CONFIG, --config CONFIG
                         Path to custom configuration file (YAML)
   --strategy {redact,mask,replace,hash}
@@ -266,14 +386,16 @@ Run the test suite:
 
 ```bash
 # Run all tests
-pytest tests/ -v
+uv run pytest tests/ -v
 
 # Run with coverage
-pytest tests/ --cov=src --cov-report=html
+uv run pytest tests/ -v --cov=src --cov-report=term-missing
 
 # Run specific test file
-pytest tests/test_detectors.py -v
+uv run pytest tests/test_llm.py -v
 ```
+
+You can also use VS Code's Test Explorer - tests are configured to use the `.venv` created by `uv sync`.
 
 **Masked:**
 ```

@@ -1,0 +1,55 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Install Dependencies",
+            "type": "shell",
+            "command": "uv sync --all-extras",
+            "group": "build",
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Run Tests",
+            "type": "shell",
+            "command": "uv run python -m pytest tests/ -v --override-ini=\"addopts=\"",
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "dependsOn": "Install Dependencies",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Run Tests (with coverage)",
+            "type": "shell",
+            "command": "uv run python -m pytest tests/ -v --cov=src --cov-report=term-missing --override-ini=\"addopts=\"",
+            "group": "test",
+            "dependsOn": "Install Dependencies",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Run LLM Tests Only",
+            "type": "shell",
+            "command": "uv run python -m pytest tests/test_llm.py -v --override-ini=\"addopts=\"",
+            "group": "test",
+            "dependsOn": "Install Dependencies",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": []
+        }
+    ]
+}

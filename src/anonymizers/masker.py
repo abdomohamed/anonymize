@@ -53,15 +53,16 @@ class Masker(BaseAnonymizer):
         value = match.value
         
         # Route to appropriate masking method based on PII type
-        if pii_type == "EMAIL":
+        # Support both short names (EMAIL) and Presidio names (EMAIL_ADDRESS)
+        if pii_type in ("EMAIL", "EMAIL_ADDRESS"):
             return self._mask_email(value)
-        elif pii_type == "PHONE":
+        elif pii_type in ("PHONE", "PHONE_NUMBER"):
             return self._mask_phone(value)
-        elif pii_type == "SSN":
+        elif pii_type in ("SSN", "US_SSN"):
             return self._mask_ssn(value)
-        elif pii_type == "CREDIT_CARD":
+        elif pii_type in ("CREDIT_CARD", "CREDIT_CARD_NUMBER"):
             return self._mask_credit_card(value)
-        elif pii_type == "IP_ADDRESS":
+        elif pii_type in ("IP_ADDRESS", "IP"):
             return self._mask_ip(value)
         else:
             # Generic masking for other types

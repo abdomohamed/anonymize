@@ -10,6 +10,10 @@ import os
 import logging
 from pathlib import Path
 
+# Load .env file if present (before any config is read)
+from dotenv import load_dotenv
+load_dotenv()
+
 from src.config.config_manager import ConfigManager
 from src.processors.file_processor import FileProcessor
 from src.processors.csv_processor import CSVProcessor, CSVProcessResult
@@ -31,6 +35,10 @@ def setup_logging(config: dict) -> None:
         format=log_format,
         filename=log_file
     )
+
+    # Suppress verbose library logging for cleaner output
+    for name in ['presidio-analyzer', 'spacy', 'azure', 'azure.identity', 'azure.core', 'httpx', 'httpcore']:
+        logging.getLogger(name).setLevel(logging.ERROR)
 
 
 def parse_args() -> argparse.Namespace:
@@ -156,6 +164,13 @@ Examples:
         default=None
     )
 
+    # LLM second pass
+    parser.add_argument(
+        '--llm',
+        action='store_true',
+        help='Enable LLM second-pass detection (requires openai package)'
+    )
+
     # Output options
     parser.add_argument(
         '--no-audit',
@@ -225,6 +240,10 @@ def build_cli_overrides(args: argparse.Namespace) -> dict:
     if processing_overrides:
         overrides['processing'] = processing_overrides
 
+    # LLM second pass
+    if args.llm:
+        overrides['llm_detection'] = {'enabled': True}
+
     # Logging
     if args.verbose:
         overrides['logging'] = {'level': 'DEBUG', 'verbose': True}
@@ -293,6 +312,8 @@ def print_results(results) -> None:
         if results.rows_failed > 0:
             print(f"Rows failed: {results.rows_failed:,}")
         print(f"PII found: {results.total_pii_found:,}")
+        if results.llm_pii_found > 0:
+            print(f"  └─ LLM second pass: {results.llm_pii_found:,}")
         if results.rows_processed > 0:
             print(f"Avg PII/row: {results.total_pii_found / results.rows_processed:.1f}")
         print(f"Processing time: {results.processing_time:.2f}s")
@@ -342,6 +363,8 @@ def print_results(results) -> None:
         print(f"Output: {result.output_path}")
         print(f"Status: {'SUCCESS' if result.success else 'FAILED'}")
         print(f"PII found: {result.pii_found}")
+        if result.llm_pii_found > 0:
+            print(f"  └─ LLM second pass: {result.llm_pii_found}")
         print(f"PII anonymized: {result.pii_anonymized}")
         print(f"Processing time: {result.processing_time:.2f}s")
 

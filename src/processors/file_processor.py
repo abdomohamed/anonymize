@@ -39,14 +39,16 @@ class FileProcessor:
     6. Generate audit log (optional)
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], silent: bool = False):
         """
         Initialize file processor.
 
         Args:
             config: Configuration dictionary
+            silent: If True, suppress initialization messages (for workers)
         """
         self.config = config
+        self.silent = silent
         self.detection_config = config.get('detection', {})
         self.anonymization_config = config.get('anonymization', {})
         self.processing_config = config.get('processing', {})
@@ -154,7 +156,8 @@ class FileProcessor:
                 registry=registry
             )
 
-            print(f"✓ Presidio initialized (language: {language})")
+            if not self.silent:
+                print(f"✓ Presidio initialized (language: {language})")
             return analyzer
 
         except ImportError:
@@ -784,10 +787,24 @@ class FileProcessor:
             matches = deduplicate_matches(matches)
             matches = merge_overlapping_matches(matches)
 
-            # Anonymize text
+            # Anonymize text (Pass 1: spaCy/Presidio)
             print("Anonymizing PII...")
             anonymized_text = self.anonymizer.anonymize_batch(matches, text)
             result.pii_anonymized = len(matches)
+
+            # Pass 2: LLM second pass (if enabled)
+            llm_config = self.config.get('llm_detection', {})
+            if llm_config.get('enabled', False):
+                print("Running LLM second pass...")
+                llm_matches = self._detect_llm_pii(anonymized_text)
+                if llm_matches:
+                    print(f"  LLM: found {len(llm_matches)} additional PII instances")
+                    llm_matches = deduplicate_matches(llm_matches)
+                    llm_matches = merge_overlapping_matches(llm_matches)
+                    anonymized_text = self.anonymizer.anonymize_batch(llm_matches, anonymized_text)
+                    result.llm_pii_found = len(llm_matches)
+                    result.pii_anonymized += len(llm_matches)
+                    result.matches.extend(llm_matches)
 
             # Write output file
             print(f"Writing output: {output_path}")
@@ -886,6 +903,22 @@ class FileProcessor:
         except Exception as e:
             print(f"  Error during Presidio analysis: {e}")
             return []
+
+    def _detect_llm_pii(self, text: str) -> List[PIIMatch]:
+        """
+        Detect PII using LLM second pass.
+
+        Args:
+            text: Text to analyze (typically already partially redacted)
+
+        Returns:
+            List of PIIMatch objects from LLM detection
+        """
+        from src.processors.pii_detection import apply_llm_second_pass
+
+        llm_config = self.config.get('llm_detection', {})
+        results = apply_llm_second_pass([text], llm_config)
+        return results[0] if results else []
 
     def _get_context(self, text: str, start: int, end: int, context_chars: int = 20) -> str:
         """

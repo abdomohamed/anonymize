@@ -15,6 +15,9 @@ wheels/
 venv/
 ENV/
 
+# ENV files
+.env
+
 # Testing
 .pytest_cache/
 .coverage
@@ -24,7 +27,6 @@ htmlcov/
 .tox/
 
 # IDE
-.vscode/
 .idea/
 *.swp
 *.swo
