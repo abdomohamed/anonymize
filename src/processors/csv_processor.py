@@ -6,6 +6,7 @@ multiprocessing support for large datasets.
 """
 
 import csv
+import logging
 import os
 import time
 from dataclasses import dataclass, field
@@ -16,7 +17,7 @@ from typing import Optional
 from tqdm import tqdm
 
 from src.utils import deduplicate_matches, merge_overlapping_matches
-from src.processors.pii_detection import analyze_text_for_pii
+from src.processors.pii_detection import analyze_text_for_pii, apply_llm_second_pass
 
 
 @dataclass
@@ -28,6 +29,7 @@ class CSVProcessResult:
     rows_processed: int = 0
     rows_failed: int = 0
     total_pii_found: int = 0
+    llm_pii_found: int = 0
     processing_time: float = 0.0
     workers_used: int = 1
     errors: list = field(default_factory=list)
@@ -40,9 +42,14 @@ _worker_processor = None
 def _init_worker(config: dict):
     """Initialize processor in worker process."""
     global _worker_processor
+    
+    # Suppress verbose logging in worker processes
+    for name in ['presidio-analyzer', 'spacy', 'azure']:
+        logging.getLogger(name).setLevel(logging.ERROR)
+    
     # Import here to avoid circular imports and ensure fresh instance per worker
     from src.processors.file_processor import FileProcessor
-    _worker_processor = FileProcessor(config)
+    _worker_processor = FileProcessor(config, silent=True)
 
 
 def _process_row_worker(args: tuple) -> tuple:
@@ -115,7 +122,8 @@ class CSVProcessor:
         """Lazy-load the file processor."""
         if self._processor is None:
             from src.processors.file_processor import FileProcessor
-            self._processor = FileProcessor(self.config)
+            # Silent=True to avoid message during batch processing (workers already init'd)
+            self._processor = FileProcessor(self.config, silent=True)
         return self._processor
 
     def process_csv(
@@ -178,20 +186,30 @@ class CSVProcessor:
 
             total_rows = len(rows)
             total_pii = 0
+            llm_pii = 0
             failed_rows = 0
             processed_rows = []
             workers_used = workers
 
             if workers > 1:
-                # Multiprocessing mode
+                # Multiprocessing mode - Pass 1: spaCy/Presidio
                 processed_rows, total_pii, failed_rows = self._process_multiprocessing(
                     rows, text_columns, workers, batch_size, show_progress
                 )
             else:
-                # Single-threaded mode
-                processed_rows, total_pii, failed_rows = self._process_single(
+                # Single-threaded mode - Pass 1: spaCy/Presidio
+                processed_rows, total_pii, llm_pii, failed_rows = self._process_single(
                     rows, text_columns, show_progress
                 )
+
+            # Pass 2: LLM second pass (runs after multiprocessing completes)
+            # This preserves batching for prompt caching benefits
+            llm_config = self.config.get('llm_detection', {})
+            if llm_config.get('enabled', False) and workers > 1:
+                processed_rows, llm_pii = self._apply_llm_pass(
+                    processed_rows, text_columns, show_progress
+                )
+                total_pii += llm_pii
 
             # Write output
             with open(output_path, 'w', encoding='utf-8', newline='') as f:
@@ -203,6 +221,7 @@ class CSVProcessor:
             result.rows_processed = total_rows
             result.rows_failed = failed_rows
             result.total_pii_found = total_pii
+            result.llm_pii_found = llm_pii
             result.processing_time = time.time() - start_time
             result.workers_used = workers_used
 
@@ -218,12 +237,17 @@ class CSVProcessor:
         text_columns: list,
         show_progress: bool
     ) -> tuple:
-        """Process rows in single-threaded mode."""
+        """Process rows in single-threaded mode with optional LLM second pass."""
         processed_rows = []
         total_pii = 0
         failed_rows = 0
 
-        iterator = tqdm(rows, desc="Processing", unit="rows") if show_progress else rows
+        # Check if LLM second pass is enabled
+        llm_config = self.config.get('llm_detection', {})
+        llm_enabled = llm_config.get('enabled', False)
+
+        # Pass 1: spaCy/Presidio detection and anonymization
+        iterator = tqdm(rows, desc="Pass 1: spaCy", unit="rows") if show_progress else rows
 
         for row in iterator:
             try:
@@ -256,7 +280,67 @@ class CSVProcessor:
                 processed_rows.append(row)  # Keep original on error
                 failed_rows += 1
 
-        return processed_rows, total_pii, failed_rows
+        # Pass 2: LLM second pass (if enabled)
+        llm_pii = 0
+        if llm_enabled:
+            processed_rows, llm_pii = self._apply_llm_pass(
+                processed_rows, text_columns, show_progress
+            )
+            total_pii += llm_pii
+
+        return processed_rows, total_pii, llm_pii, failed_rows
+
+    def _apply_llm_pass(
+        self,
+        rows: list,
+        text_columns: list,
+        show_progress: bool
+    ) -> tuple:
+        """
+        Apply LLM second pass to already-processed rows.
+
+        Args:
+            rows: List of row dicts (already processed by spaCy)
+            text_columns: Columns to check
+            show_progress: Show progress bar
+
+        Returns:
+            Tuple of (processed_rows, llm_pii_count)
+        """
+        llm_config = self.config.get('llm_detection', {})
+        llm_pii = 0
+
+        # Collect all texts from all columns that need LLM processing
+        # Format: [(row_idx, col_name, text), ...]
+        texts_to_process = []
+        for row_idx, row in enumerate(rows):
+            for col in text_columns:
+                if col in row and row[col]:
+                    texts_to_process.append((row_idx, col, str(row[col])))
+
+        if not texts_to_process:
+            return rows, 0
+
+        # Extract just the texts for batch processing
+        texts_only = [t[2] for t in texts_to_process]
+
+        # Run LLM detection on all texts at once (progress bar is inside)
+        all_llm_matches = apply_llm_second_pass(texts_only, llm_config, show_progress)
+
+        # Apply LLM matches back to rows
+        for (row_idx, col, _), matches in zip(texts_to_process, all_llm_matches):
+            if not matches:
+                continue
+
+            matches = deduplicate_matches(matches)
+            matches = merge_overlapping_matches(matches)
+            llm_pii += len(matches)
+
+            # Apply anonymization to the already-processed text
+            current_text = rows[row_idx][col]
+            rows[row_idx][col] = self.processor.anonymizer.anonymize_batch(matches, current_text)
+
+        return rows, llm_pii
 
     def _process_multiprocessing(
         self,

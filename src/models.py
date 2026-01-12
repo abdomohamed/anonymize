@@ -102,6 +102,7 @@ class ProcessResult:
     input_path: str
     output_path: Optional[str] = None
     pii_found: int = 0
+    llm_pii_found: int = 0
     pii_anonymized: int = 0
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
